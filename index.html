@@ -203,11 +203,27 @@
                     const chavesSetores = ['CASA CIVIL', 'PATRIMÔNIO', 'PATRIMONIO', 'OBRAS', 'LICITAÇÃO', 'LICITACAO', 'JURÍDICO', 'JURIDICO', 'PUBLICAÇÃO', 'PUBLICACAO', 'PEDIDOS', 'PEDIDO'];
                     let colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => c.toUpperCase().includes(chave)));
                     
-                    // Força a coluna "Pedidos" a ser a última das etapas do processo, ficando exatamente antes da coluna fixa "Status"
+                    // Move a coluna "Pedidos" para entre "Obras" e "Licitação"
                     const colPedidos = colunasReaisSetores.filter(c => c.toUpperCase().includes('PEDIDO'));
                     if (colPedidos.length > 0) {
+                        // Remove pedidos do array temporariamente
                         colunasReaisSetores = colunasReaisSetores.filter(c => !c.toUpperCase().includes('PEDIDO'));
-                        colunasReaisSetores.push(...colPedidos);
+                        
+                        // Encontra a posição da coluna de Licitação
+                        let idxLicitacao = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('LICITAÇÃO') || c.toUpperCase().includes('LICITACAO'));
+                        
+                        if (idxLicitacao !== -1) {
+                            // Insere Pedidos exatamente antes de Licitação
+                            colunasReaisSetores.splice(idxLicitacao, 0, ...colPedidos);
+                        } else {
+                            // Se não achar licitação, tenta colocar depois de obras
+                            let idxObras = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('OBRAS'));
+                            if (idxObras !== -1) {
+                                colunasReaisSetores.splice(idxObras + 1, 0, ...colPedidos);
+                            } else {
+                                colunasReaisSetores.push(...colPedidos); // fallback
+                            }
+                        }
                     }
 
                     const colunaStatusOriginal = todasColunas.find(c => c.toUpperCase() === 'STATUS');
