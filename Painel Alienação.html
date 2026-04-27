@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Olímpia 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+        .sidebar { background-color: #003366; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.15); border: 1px solid #e2e8f0; }
+        .nav-link { transition: all 0.2s; border-radius: 8px; }
+        .nav-link.active { background-color: #ffb800; color: #003366 !important; font-weight: 600; }
+        .text-navy { color: #003366; }
+        .text-gray-contrast { color: #475569; }
+        .section-content { display: none; }
+        .section-content.active { display: block; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .logo-container img { object-fit: contain; }
+        
+        /* Ocultar barras de rolagem nativas horizontais antigas */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Nova Barra de Rolagem Horizontal (Customizada) para tabelas e status */
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Ajuste para a coluna Status preencher a célula */
+        .status-cell { height: 1px; padding: 0 !important; }
+        .status-cell > div { min-height: 100%; height: 100%; }
+        
+        /* Previne que o conteúdo interno do menu amasse quando encolhe */
+        .sidebar-content { min-width: 256px; }
+    </style>
+</head>
+<body class="flex min-h-screen">
+
+    <!-- Menu Lateral com Width Dinâmico e Transição -->
+    <aside id="sidebar" class="sidebar text-white flex-shrink-0 flex flex-col transition-all duration-300 w-64 overflow-hidden h-screen sticky top-0 z-50">
+        <div class="sidebar-content flex flex-col h-full">
+            <div class="p-6 text-center border-b border-blue-900">
+                <div class="bg-white p-2 rounded-lg mb-4 inline-block logo-container shadow-lg">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/30/Bras%C3%A3o_de_Ol%C3%ADmpia%2C_SP.jpg" alt="Brasão de Olímpia" class="h-16">
+                </div>
+                <h2 class="text-[10px] font-bold tracking-widest uppercase text-blue-100 leading-tight px-2">Relatório de Imóveis em Alienação</h2>
+            </div>
+            
+            <!-- Menu gerado dinamicamente via JS -->
+            <nav id="menu-lateral" class="flex-grow p-4 space-y-2 mt-4 overflow-y-auto no-scrollbar">
+                <div class="animate-pulse flex items-center space-x-3 p-3">
+                    <div class="rounded-full bg-blue-800 h-6 w-6"></div>
+                    <div class="h-4 bg-blue-800 rounded w-3/4"></div>
+                </div>
+            </nav>
+
+            <div class="p-6 bg-blue-950 text-[10px] text-blue-300 mt-auto border-t border-blue-900">
+                <p class="font-bold">Divisão de Governança, Processos e Projetos Estratégicos</p>
+                <p>Casa Civil | Município de Olímpia - SP</p>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-grow flex flex-col min-w-0 w-full">
+        <header class="bg-white border-b h-16 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm">
+            <div class="flex items-center space-x-4">
+                <button onclick="toggleSidebar()" class="text-navy hover:text-blue-600 transition-colors focus:outline-none">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                <h1 id="page-title" class="text-xl font-bold text-navy uppercase tracking-tight">Carregando...</h1>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span class="bg-blue-100 text-navy px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Ano 2026</span>
+                <div class="h-8 w-8 rounded-full bg-navy text-gold flex items-center justify-center font-bold text-xs shadow-md border-2 border-gold">OP</div>
+            </div>
+        </header>
+
+        <!-- Seções geradas dinamicamente via JS -->
+        <div id="conteiner-secoes" class="p-4 md:p-8 w-full mx-auto max-w-[1400px]">
+            <div class="flex flex-col items-center justify-center h-64 text-navy mt-20">
+                <i class="fa-solid fa-spinner fa-spin text-5xl mb-4 text-gold"></i>
+                <h2 class="text-xl font-bold uppercase tracking-widest">Sincronizando Dados</h2>
+                <p class="text-sm text-gray-500 mt-2">Construindo painéis a partir da nuvem...</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Gestão Retrátil do Menu
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.classList.contains('w-64')) {
+                sidebar.classList.replace('w-64', 'w-0');
+            } else {
+                sidebar.classList.replace('w-0', 'w-64');
+            }
+        }
+
+        // Integração com Google Sheets
+        const url = 'https://script.google.com/macros/s/AKfycbyeLUtdqaGORufhdZ4oMz-U_reZz6p6eidArEdouUs2i7bF-fCmYeRRDiUu1GSAZtwg/exec';
+
+        // Função global para alternar abas
+        window.showSection = function(sectionId, element, titulo) {
+            document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+            element.classList.add('active');
+
+            document.querySelectorAll('.section-content').forEach(section => section.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+
+            document.getElementById('page-title').innerText = titulo;
+            
+            // Em ecrãs móveis, recolhe o menu automaticamente ao clicar numa aba
+            if (window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.replace('w-64', 'w-0');
+            }
+        }
+
+        async function carregarDados() {
+            try {
+                const resposta = await fetch(url);
+                const textoResposta = await resposta.text();
+                
+                let dadosBrutos;
+                try {
+                    dadosBrutos = JSON.parse(textoResposta);
+                } catch (parseErro) {
+                    throw new Error("O Google Script retornou HTML em vez de JSON. Verifique as permissões de implantação.");
+                }
+                
+                let dados = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
+
+                // Remove a linha com os "Totais" vinda do final da planilha para não aparecer nas tabelas e gráficos
+                dados = dados.filter(linha => {
+                    const valImovel = String(linha['IMÓVEL'] || '').toUpperCase().trim();
+                    const valOrdem = String(linha['ORDEM'] || linha['Ordem'] || '').toUpperCase().trim();
+                    return valImovel !== 'TOTAL' && !valImovel.startsWith('TOTAL') && valOrdem !== 'TOTAL';
+                });
+
+                if (dados.length > 0) {
+                    const menuLateral = document.getElementById('menu-lateral');
+                    const conteinerSecoes = document.getElementById('conteiner-secoes');
+
+                    menuLateral.innerHTML = '';
+                    conteinerSecoes.innerHTML = '';
+
+                    const todasColunas = Object.keys(dados[0]);
+                    
+                    const chavesSetores = ['CASA CIVIL', 'PATRIMÔNIO', 'PATRIMONIO', 'OBRAS', 'LICITAÇÃO', 'LICITACAO', 'JURÍDICO', 'JURIDICO', 'PUBLICAÇÃO', 'PUBLICACAO'];
+                    const colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => c.toUpperCase().includes(chave)));
+                    const colunaStatusOriginal = todasColunas.find(c => c.toUpperCase() === 'STATUS');
+                    const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO'));
+
+                    let labelsSetorAtual = [];
+                    let valuesSetorAtual = [];
+
+                    // =======================================================================
+                    // 1. ABA "SETOR ATUAL" (KANBAN GRID + GRÁFICO EM BAIXO)
+                    // =======================================================================
+                    if (colunasReaisSetores.length > 0) {
+                        const idSecaoSetorAtual = 'secao-setor-atual';
+                        
+                        menuLateral.innerHTML += `
+                            <a href="#" onclick="showSection('${idSecaoSetorAtual}', this, 'Setor Atual')" class="nav-link flex items-center space-x-3 p-3 text-gold hover:bg-blue-800 border-b border-blue-800 pb-4 mb-2">
+                                <i class="fa-solid fa-table-columns w-6 text-center"></i>
+                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">Setor Atual</span>
+                            </a>
+                        `;
+
+                        let headerKanban = `
+                            <tr class="shadow-sm bg-gray-100">
+                                <th class="p-4 text-left bg-[#207c8d] text-white border-r border-[#196373] min-w-[200px] uppercase tracking-wider text-[11px] sticky left-0 z-40">Imóvel</th>
+                        `;
+                        colunasReaisSetores.forEach((setor) => {
+                            headerKanban += `<th class="p-3 bg-gray-100 text-navy text-center border-r border-gray-300 border-b-2 border-gold min-w-[120px] text-[10px] uppercase">${setor}</th>`;
+                        });
+                        headerKanban += `<th class="p-3 bg-gray-50 text-navy text-center border-l-2 border-gray-300 min-w-[120px] text-[11px] uppercase shadow-sm">Status / Setor</th></tr>`;
+
+                        let contagemSetorAtual = {};
+                        let linhasKanban = '';
+                        
+                        dados.forEach((linha, idx) => {
+                            let isEven = idx % 2 === 0;
+                            let rowClass = isEven ? 'bg-gray-50/50' : 'bg-white';
+
+                            linhasKanban += `<tr class="border-b border-gray-200 hover:bg-blue-50 transition-colors ${rowClass}">`;
+                            linhasKanban += `<td class="p-4 text-left font-bold text-white bg-[#2b8a9c] border-r border-[#196373] truncate max-w-[250px] shadow-sm sticky left-0 z-10" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>`;
+                            
+                            let setorAtualNome = 'NÃO INICIADO';
+                            let setorAtualBg = 'bg-gray-200';
+                            let setorAtualTxt = 'text-gray-500';
+
+                            colunasReaisSetores.forEach(setor => {
+                                let valorSetor = String(linha[setor] || '').trim();
+                                let content = '<span class="text-gray-300 font-black">-</span>';
+                                
+                                if (valorSetor !== '') {
+                                    let vLower = valorSetor.toLowerCase();
+                                    let bg = 'bg-gray-100', txt = 'text-gray-600', icon = '';
+                                    
+                                    if(vLower.includes('ok') || vLower.includes('concluído') || vLower.includes('concluido') || vLower.includes('feito') || vLower.includes('aprovado') || vLower === 'sim' || vLower === 'v') { 
+                                        bg = 'bg-[#1e8b78]'; txt = 'text-white'; icon = '<i class="fa-solid fa-check mr-1"></i>'; 
+                                    }
+                                    else if(vLower.includes('pendente') || vLower.includes('aguardando') || vLower.includes('parado') || vLower.includes('não') || vLower.includes('nao') || vLower === 'x') { 
+                                        bg = 'bg-[#d97706]'; txt = 'text-white'; icon = '<i class="fa-solid fa-xmark mr-1"></i>'; 
+                                    }
+                                    else if(vLower.includes('andamento') || vLower.includes('fazendo') || vLower.includes('análise') || vLower.includes('analise')) { 
+                                        bg = 'bg-[#0284c7]'; txt = 'text-white'; icon = '<i class="fa-solid fa-spinner mr-1 text-xs"></i>'; 
+                                    }
+                                    else if(vLower.includes('revisão') || vLower.includes('revisao')) {
+                                        bg = 'bg-[#eab308]'; txt = 'text-white'; icon = '<i class="fa-solid fa-magnifying-glass mr-1 text-xs"></i>';
+                                    }
+                                    
+                                    setorAtualNome = setor;
+                                    setorAtualBg = bg;
+                                    setorAtualTxt = txt;
+                                    if(setorAtualBg === 'bg-gray-100') {
+                                        setorAtualBg = 'bg-[#607d8b]'; 
+                                        setorAtualTxt = 'text-white';
+                                    }
+
+                                    content = `<div class="w-full py-1.5 px-1 rounded ${bg} ${txt} text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center justify-center text-center leading-tight min-h-[28px]">${icon} ${valorSetor}</div>`;
+                                }
+                                
+                                linhasKanban += `<td class="p-2 text-center border-r border-gray-200 align-middle px-3">${content}</td>`;
+                            });
+
+                            contagemSetorAtual[setorAtualNome] = (contagemSetorAtual[setorAtualNome] || 0) + 1;
+
+                            linhasKanban += `<td class="status-cell border-l-2 border-gray-300"><div class="w-full flex items-center justify-center p-3 font-bold uppercase text-[10px] tracking-wider text-center leading-tight shadow-inner ${setorAtualBg} ${setorAtualTxt}">${setorAtualNome}</div></td>`;
+                            linhasKanban += `</tr>`;
+                        });
+
+                        let cardsHtml = `
+                            <div class="card p-4 border-l-4 border-navy shadow-sm flex flex-col justify-center">
+                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total de Imóveis</p>
+                                <h3 class="text-3xl font-black text-navy mt-1">${dados.length}</h3>
+                            </div>
+                        `;
+                        
+                        Object.entries(contagemSetorAtual).forEach(([setor, qtd]) => {
+                            labelsSetorAtual.push(setor);
+                            valuesSetorAtual.push(qtd);
+                            cardsHtml += `
+                                <div class="card p-4 border-l-4 border-gold shadow-sm flex flex-col justify-center">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate" title="${setor}">${setor}</p>
+                                    <h3 class="text-2xl font-black text-navy mt-1">${qtd}</h3>
+                                </div>
+                            `;
+                        });
+
+                        conteinerSecoes.innerHTML += `
+                            <section id="${idSecaoSetorAtual}" class="section-content">
+                                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+                                    ${cardsHtml}
+                                </div>
+
+                                <div class="flex flex-col gap-8">
+                                    <div class="card overflow-hidden shadow-md bg-white border border-gray-300 w-full">
+                                        <div class="overflow-x-auto custom-scrollbar w-full">
+                                            <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+                                                <thead class="shadow-sm bg-white">
+                                                    ${headerKanban}
+                                                </thead>
+                                                <tbody class="text-gray-800 font-medium">
+                                                    ${linhasKanban}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <div class="card p-8 flex flex-col items-center justify-center border-t-4 border-gold shadow-md">
+                                        <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gray-100 pb-2 text-center w-full">Distribuição Atual do Portfólio</h4>
+                                        <div class="h-80 w-full relative max-w-2xl mx-auto">
+                                            <canvas id="chart-setor-atual"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        `;
+                    }
+
+                    // =======================================================================
+                    // 2. DEMAIS ABAS (ESTIMATIVA, STATUS E OUTRAS) - GRÁFICOS EM BAIXO
+                    // =======================================================================
+                    const colunasMenu = todasColunas.filter(c => {
+                        const cUpper = c.toUpperCase().trim();
+                        if (cUpper === 'IMÓVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
+                        
+                        if (cUpper === 'MATRÍCULA' || cUpper === 'MATRICULA' || cUpper === 'ÁREA' || cUpper === 'AREA' || cUpper === 'ORDEM') return false;
+                        if (cUpper.includes('ALIENAÇÃO') || cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA')) return false;
+                        if (cUpper.includes('PAGAMENTO')) return false;
+
+                        return !chavesSetores.some(chave => cUpper.includes(chave));
+                    });
+
+                    const icones = ['fa-hashtag', 'fa-ruler', 'fa-money-bill-wave', 'fa-file-signature', 'fa-map-pin', 'fa-traffic-light', 'fa-chart-pie'];
+
+                    colunasMenu.forEach((coluna, index) => {
+                        const idSecao = 'secao-' + index;
+                        const iconeClasse = icones[index % icones.length];
+                        const isStatusTab = coluna.toUpperCase() === 'STATUS'; 
+                        const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA');
+
+                        menuLateral.innerHTML += `
+                            <a href="#" onclick="showSection('${idSecao}', this, '${coluna}')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                                <i class="fa-solid ${iconeClasse} w-6 text-center"></i>
+                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">${coluna}</span>
+                            </a>
+                        `;
+
+                        let contagemGrafico = {};
+                        let linhasTabela = '';
+
+                        let countPendente = 0, valPendente = 0;
+                        let countStrictIniciado = 0, valStrictIniciado = 0;
+                        let countAndamento = 0, valAndamento = 0;
+                        let countConcluido = 0, valConcluido = 0;
+
+                        dados.forEach((linha, i) => {
+                            let valorColuna = linha[coluna] || '-';
+                            let numValor = 0;
+                            
+                            let valAlign = 'text-left';
+
+                            if (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('ÁREA') || coluna.toUpperCase().includes('AREA')) {
+                                valAlign = 'text-center';
+                            }
+                            if (isEstimativaTab) {
+                                valAlign = 'text-center';
+                            }
+
+                            if (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
+                                let v = String(valorColuna).trim();
+                                if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
+                                numValor = parseFloat(v.replace(/[^\d.-]/g, ''));
+                                
+                                if (!isNaN(numValor)) valorColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor);
+                                else numValor = 0;
+                            }
+                            
+                            if (isEstimativaTab) {
+                                let valorSomar = isNaN(numValor) ? 0 : numValor;
+                                let isBlank = true, hasX = false, lastIsV = false;
+
+                                for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
+                                    let valCell = String(linha[colunasReaisSetores[j]] || '').trim().toLowerCase();
+                                    if (valCell !== '') {
+                                        if (isBlank) {
+                                            if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí')) lastIsV = true;
+                                        }
+                                        isBlank = false;
+                                        if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado')) hasX = true;
+                                    }
+                                }
+
+                                if (isBlank) { countPendente++; valPendente += valorSomar; }
+                                else if (lastIsV) { countConcluido++; valConcluido += valorSomar; }
+                                else if (hasX) { countAndamento++; valAndamento += valorSomar; }
+                                else { countStrictIniciado++; valStrictIniciado += valorSomar; }
+                            }
+
+                            if(isStatusTab) {
+                                let statusTexto = linha['STATUS'] || '-';
+                                let corStatus = 'text-gray-600';
+                                if(statusTexto.toLowerCase().includes('regular') || statusTexto.toLowerCase().includes('ativo')) corStatus = 'text-green-600 bg-green-100 px-2 py-1 rounded';
+                                else if(statusTexto.toLowerCase().includes('pendente') || statusTexto.toLowerCase().includes('irregular')) corStatus = 'text-orange-600 bg-orange-100 px-2 py-1 rounded';
+                                
+                                // Retornando para o span simples sem a div de rolagem, garantindo que não quebre linha e alinhe à esquerda
+                                valorColuna = `<span class="font-bold text-[10px] uppercase tracking-wider whitespace-nowrap inline-block ${corStatus}">${statusTexto}</span>`;
+                            }
+
+                            let valorGrafico = String(linha[coluna] || 'Não Informado').trim();
+                            if(valorGrafico.length > 35) valorGrafico = valorGrafico.substring(0, 35) + '...';
+                            contagemGrafico[valorGrafico] = (contagemGrafico[valorGrafico] || 0) + 1;
+
+                            let tdOrdemStatus = '';
+                            let colunasExtrasStatus = '';
+                            if (isStatusTab) {
+                                let valOrdem = linha['ORDEM'] || linha['Ordem'] || '-';
+                                tdOrdemStatus = `<td class="p-3 text-center text-gray-800 font-bold text-xs border-r border-gray-100">${valOrdem}</td>`;
+                                
+                                let valMatricula = linha['MATRÍCULA'] || linha['MATRICULA'] || '-';
+                                let valArea = linha['ÁREA'] || linha['AREA'] || '-';
+                                colunasExtrasStatus = `
+                                    <td class="p-3 text-left text-gray-700 text-xs">${valMatricula}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs">${valArea}</td>
+                                `;
+                            }
+
+                            let tdPagamentoHtml = '';
+                            if (isEstimativaTab) {
+                                let valPagamento = colunaPagamentoOriginal ? (linha[colunaPagamentoOriginal] || '-') : '-';
+                                tdPagamentoHtml = `<td class="p-3 text-left text-gray-700 text-xs border-l border-gray-100">${valPagamento}</td>`;
+                            }
+
+                            linhasTabela += `
+                                <tr class="${i % 2 === 0 ? 'bg-gray-50' : 'hover:bg-gray-100'} border-b border-gray-200 transition-colors">
+                                    ${tdOrdemStatus}
+                                    <td class="p-3 text-left font-bold text-navy truncate max-w-[200px]" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>
+                                    ${colunasExtrasStatus}
+                                    <td class="p-3 ${valAlign} text-gray-700 text-xs">${valorColuna}</td>
+                                    ${tdPagamentoHtml}
+                                </tr>
+                            `;
+                        });
+
+                        let countIniciado = countStrictIniciado + countAndamento + countConcluido;
+                        let valIniciado = valStrictIniciado + valAndamento + valConcluido;
+
+                        let cardsEstimativaHtml = '';
+                        if (isEstimativaTab) {
+                            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+                            cardsEstimativaHtml = `
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                                    <div class="card p-4 border-l-4 border-gray-400 shadow-sm bg-white">
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Pendente (Vazio)</p>
+                                        <div class="flex items-baseline justify-between mt-1">
+                                            <h3 class="text-xl font-black text-navy">${countPendente} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
+                                            <span class="text-[9px] font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">${fmt.format(valPendente)}</span>
+                                        </div>
+                                    </div>
+                                    <div class="card p-4 border-l-4 border-blue-400 shadow-sm bg-white">
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Iniciado (Total)</p>
+                                        <div class="flex items-baseline justify-between mt-1">
+                                            <h3 class="text-xl font-black text-navy">${countIniciado} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
+                                            <span class="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">${fmt.format(valIniciado)}</span>
+                                        </div>
+                                    </div>
+                                    <div class="card p-4 border-l-4 border-orange-500 shadow-sm bg-white">
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Andamento (Tem X)</p>
+                                        <div class="flex items-baseline justify-between mt-1">
+                                            <h3 class="text-xl font-black text-navy">${countAndamento} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
+                                            <span class="text-[9px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded">${fmt.format(valAndamento)}</span>
+                                        </div>
+                                    </div>
+                                    <div class="card p-4 border-l-4 border-green-500 shadow-sm bg-white">
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Concluído (Final V)</p>
+                                        <div class="flex items-baseline justify-between mt-1">
+                                            <h3 class="text-xl font-black text-navy">${countConcluido} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
+                                            <span class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded">${fmt.format(valConcluido)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        let headerTabelaHtml = '';
+                        let theadClasses = '';
+                        
+                        let headerAlignColuna = (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('ÁREA') || coluna.toUpperCase().includes('AREA')) ? 'text-center' : 'text-left';
+                        if (isEstimativaTab) { headerAlignColuna = 'text-center'; }
+
+                        if (isStatusTab) {
+                            headerTabelaHtml = `
+                                <tr>
+                                    <th class="p-3 text-center border-r border-b border-gray-300 w-16">Ordem</th>
+                                    <th class="p-3 text-left w-1/3 border-b border-gray-300">Imóvel</th>
+                                    <th class="p-3 text-left border-b border-gray-300">Matrícula</th>
+                                    <th class="p-3 text-center border-b border-gray-300">Área</th>
+                                    <th class="p-3 text-left border-b border-gray-300">Status</th>
+                                </tr>
+                            `;
+                            theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
+                        } else if (isEstimativaTab) {
+                            let tituloPag = colunaPagamentoOriginal || 'Formas de Pagamentos';
+                            headerTabelaHtml = `
+                                <tr>
+                                    <th class="p-3 text-left w-1/3 border-r border-white/20">Imóvel</th>
+                                    <th class="p-3 ${headerAlignColuna} border-r border-white/20">${coluna}</th>
+                                    <th class="p-3 text-left">${tituloPag}</th>
+                                </tr>
+                            `;
+                            theadClasses = 'uppercase text-[11px] bg-navy text-white shadow-sm';
+                        } else {
+                            headerTabelaHtml = `
+                                <tr>
+                                    <th class="p-3 text-left w-1/2 border-r border-white/20">Imóvel</th>
+                                    <th class="p-3 ${headerAlignColuna}">${coluna}</th>
+                                </tr>
+                            `;
+                            theadClasses = 'uppercase text-[11px] bg-navy text-white shadow-sm';
+                        }
+
+                        conteinerSecoes.innerHTML += `
+                            <section id="${idSecao}" class="section-content">
+                                ${cardsEstimativaHtml}
+
+                                <div class="flex flex-col gap-8">
+                                    <div class="card overflow-hidden shadow-md bg-white w-full">
+                                        <div class="w-full overflow-x-auto custom-scrollbar">
+                                            <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+                                                <thead class="${theadClasses}">
+                                                    ${headerTabelaHtml}
+                                                </thead>
+                                                <tbody class="text-gray-800 font-medium">
+                                                    ${linhasTabela}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    ${!isStatusTab ? `
+                                    <div class="card p-8 flex flex-col items-center justify-center shadow-md">
+                                        <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${coluna}</h4>
+                                        <div id="wrapper-chart-${idSecao}" class="h-80 w-full relative max-w-3xl mx-auto">
+                                            <canvas id="chart-${idSecao}"></canvas>
+                                        </div>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </section>
+                        `;
+                    });
+
+                    // Ativa a primeira aba do menu
+                    const primeiroLink = document.querySelector('.nav-link');
+                    if (primeiroLink) { primeiroLink.click(); }
+
+                    // Renderiza o Gráfico do Setor Atual (Distribuição Atual do Portfólio)
+                    const canvasSetorAtual = document.getElementById('chart-setor-atual');
+                    if (canvasSetorAtual && labelsSetorAtual.length > 0) {
+                        const gerarCoresSetor = (qtd) => {
+                            const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
+                            let cores = [];
+                            for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
+                            return cores;
+                        };
+
+                        new Chart(canvasSetorAtual.getContext('2d'), {
+                            type: 'pie',
+                            data: {
+                                labels: labelsSetorAtual,
+                                datasets: [{
+                                    label: 'Quantidade',
+                                    data: valuesSetorAtual,
+                                    backgroundColor: gerarCoresSetor(labelsSetorAtual.length),
+                                    borderWidth: 1,
+                                    borderColor: '#ffffff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        display: labelsSetorAtual.length <= 20,
+                                        position: 'right',
+                                        labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
+                                    },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
+                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
+                                        padding: 12, cornerRadius: 8, displayColors: true,
+                                        callbacks: {
+                                            label: function(context) {
+                                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // Renderiza os Gráficos Normais
+                    colunasMenu.forEach((coluna, index) => {
+                        const idSecao = 'secao-' + index;
+                        const canvas = document.getElementById(`chart-${idSecao}`);
+                        
+                        if(canvas) {
+                            const isPizza = ['ÁREA', 'ESTIMATIVA', 'ALIENAÇÃO', 'PERMUTA', 'DESAPROPRIAÇÃO'].some(c => coluna.toUpperCase().includes(c));
+                            const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA');
+                            
+                            let labels = [];
+                            let values = [];
+
+                            if (isEstimativaTab) {
+                                let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
+                                
+                                dados.forEach(d => {
+                                    let valStr = String(d[coluna] || '0').trim();
+                                    if (valStr.includes(',')) valStr = valStr.replace(/\./g, '').replace(',', '.');
+                                    let num = parseFloat(valStr.replace(/[^\d.-]/g, '')) || 0;
+
+                                    let isBlank = true, hasX = false, lastIsV = false;
+                                    for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
+                                        let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
+                                        if (valCell !== '') {
+                                            if (isBlank) {
+                                                if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí')) lastIsV = true;
+                                            }
+                                            isBlank = false;
+                                            if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado')) hasX = true;
+                                        }
+                                    }
+                                    if (isBlank) valPen += num;
+                                    else if (lastIsV) valCon += num;
+                                    else if (hasX) valAnd += num;
+                                    else valIniStrict += num;
+                                });
+
+                                if (valPen > 0) { labels.push('Pendente'); values.push(valPen); }
+                                if (valIniStrict > 0) { labels.push('Apenas Iniciado'); values.push(valIniStrict); }
+                                if (valAnd > 0) { labels.push('Em Andamento'); values.push(valAnd); }
+                                if (valCon > 0) { labels.push('Concluído'); values.push(valCon); }
+                            } else {
+                                const contagem = {};
+                                dados.forEach(d => {
+                                    let v = String(d[coluna] || 'Não Informado').trim();
+                                    if(v.length > 35) v = v.substring(0, 35) + '...';
+                                    contagem[v] = (contagem[v] || 0) + 1;
+                                });
+                                labels = Object.keys(contagem);
+                                values = Object.values(contagem);
+                            }
+                            
+                            if (!isPizza && labels.length > 15 && labels.length >= dados.length * 0.8) {
+                                document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
+                                    <div class="flex items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
+                                        <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i>
+                                        Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.
+                                    </div>
+                                `;
+                                return;
+                            }
+
+                            const gerarCores = (qtd) => {
+                                const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
+                                let cores = [];
+                                for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
+                                return cores;
+                            };
+
+                            let tipoGrafico = labels.length > 7 ? 'bar' : 'doughnut';
+                            if (isPizza) tipoGrafico = 'pie';
+                            
+                            new Chart(canvas.getContext('2d'), {
+                                type: tipoGrafico,
+                                data: {
+                                    labels: labels,
+                                    datasets: [{
+                                        label: 'Quantidade',
+                                        data: values,
+                                        backgroundColor: gerarCores(labels.length),
+                                        borderWidth: (tipoGrafico === 'bar' && labels.length > 7) ? 0 : 1,
+                                        borderColor: '#ffffff'
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            display: labels.length <= 20,
+                                            position: 'right',
+                                            labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
+                                        },
+                                        tooltip: {
+                                            backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                            titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
+                                            bodyFont: { family: "'Poppins', sans-serif", size: 12 },
+                                            padding: 12, cornerRadius: 8, displayColors: true,
+                                            callbacks: {
+                                                title: function(tooltipItems) { return tooltipItems[0].label; },
+                                                label: function(context) {
+                                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                    const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                    if (isEstimativaTab) {
+                                                        const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
+                                                        return [`Valor Total: ${fmt}`, `Representa: ${porcentagem}%`];
+                                                    }
+                                                    return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: tipoGrafico === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { display: false } } : undefined
+                                }
+                            });
+                        }
+                    });
+
+                }
+            } catch (erro) {
+                console.error("Erro ao processar dados:", erro);
+                document.getElementById('conteiner-secoes').innerHTML = `
+                    <div class="text-center p-10 card w-full">
+                        <i class="fa-solid fa-triangle-exclamation text-red-500 text-5xl mb-4"></i>
+                        <h2 class="text-xl font-bold text-navy">Erro de Acesso à Planilha</h2>
+                        <p class="text-gray-600 mt-2">Verifique a URL e as permissões do Apps Script no Google.</p>
+                    </div>
+                `;
+            }
+        }
+
+        window.onload = carregarDados;
+    </script>
+</body>
+</html>
