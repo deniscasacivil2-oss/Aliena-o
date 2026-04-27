@@ -4,10 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Olímpia 2026</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Leaflet.js (Mapas) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f1f5f9; color: #1e293b; }
         .sidebar { background-color: #003366; }
@@ -37,6 +47,9 @@
         
         /* Previne que o conteúdo interno do menu amasse quando encolhe */
         .sidebar-content { min-width: 256px; }
+
+        /* Ajuste do z-index do mapa para não sobrepor o cabeçalho e menu */
+        .leaflet-container { z-index: 10 !important; font-family: 'Poppins', sans-serif; }
     </style>
 </head>
 <body class="flex min-h-screen">
@@ -114,9 +127,43 @@
 
             document.getElementById('page-title').innerText = titulo;
             
+            // Recalcula o tamanho do mapa caso exista na aba atual (para evitar que o mapa carregue quebrado em abas escondidas)
+            if (window.appMaps && window.appMaps[sectionId]) {
+                setTimeout(() => {
+                    window.appMaps[sectionId].invalidateSize();
+                }, 50);
+            }
+
             // Em ecrãs móveis, recolhe o menu automaticamente ao clicar numa aba
             if (window.innerWidth < 768) {
                 document.getElementById('sidebar').classList.replace('w-64', 'w-0');
+            }
+        }
+
+        // --- FUNÇÕES NOVAS PARA O MAPA DINÂMICO ---
+        window.parseCoordinates = function(coordStr) {
+            if (!coordStr) return null;
+            let simpleMatch = coordStr.match(/(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
+            if (simpleMatch) return [parseFloat(simpleMatch[1]), parseFloat(simpleMatch[2])];
+            let urlMatch = coordStr.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (urlMatch) return [parseFloat(urlMatch[1]), parseFloat(urlMatch[2])];
+            let qMatch = coordStr.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (qMatch) return [parseFloat(qMatch[1]), parseFloat(qMatch[2])];
+            return null;
+        }
+
+        window.focarNoMapa = function(idSecao, lat, lng) {
+            if (window.appMaps && window.appMaps[idSecao]) {
+                const map = window.appMaps[idSecao];
+                // Faz a câmera voar suavemente até o local
+                map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
+                
+                // Aguarda o voo terminar (1.5s) e abre a etiqueta de nome do imóvel
+                if (window.appMarkers && window.appMarkers[`${idSecao}_${lat}_${lng}`]) {
+                    setTimeout(() => {
+                        window.appMarkers[`${idSecao}_${lat}_${lng}`].openPopup();
+                    }, 1500); 
+                }
             }
         }
 
@@ -132,14 +179,17 @@
                     throw new Error("O Google Script retornou HTML em vez de JSON. Verifique as permissões de implantação.");
                 }
                 
-                let dados = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
+                let dadosCompletos = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
 
-                // Remove a linha com os "Totais" vinda do final da planilha para não aparecer nas tabelas e gráficos
-                dados = dados.filter(linha => {
+                // Identifica e guarda a linha de "Total" para exibir apenas onde for necessário
+                let linhaTotal = dadosCompletos.find(linha => {
                     const valImovel = String(linha['IMÓVEL'] || '').toUpperCase().trim();
                     const valOrdem = String(linha['ORDEM'] || linha['Ordem'] || '').toUpperCase().trim();
-                    return valImovel !== 'TOTAL' && !valImovel.startsWith('TOTAL') && valOrdem !== 'TOTAL';
+                    return valImovel === 'TOTAL' || valImovel.startsWith('TOTAL') || valOrdem === 'TOTAL';
                 });
+
+                // Cria o array de dados principais sem a linha de Total (para não quebrar contagens e gráficos)
+                let dados = dadosCompletos.filter(linha => linha !== linhaTotal);
 
                 if (dados.length > 0) {
                     const menuLateral = document.getElementById('menu-lateral');
@@ -150,8 +200,16 @@
 
                     const todasColunas = Object.keys(dados[0]);
                     
-                    const chavesSetores = ['CASA CIVIL', 'PATRIMÔNIO', 'PATRIMONIO', 'OBRAS', 'LICITAÇÃO', 'LICITACAO', 'JURÍDICO', 'JURIDICO', 'PUBLICAÇÃO', 'PUBLICACAO'];
-                    const colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => c.toUpperCase().includes(chave)));
+                    const chavesSetores = ['CASA CIVIL', 'PATRIMÔNIO', 'PATRIMONIO', 'OBRAS', 'LICITAÇÃO', 'LICITACAO', 'JURÍDICO', 'JURIDICO', 'PUBLICAÇÃO', 'PUBLICACAO', 'PEDIDOS', 'PEDIDO'];
+                    let colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => c.toUpperCase().includes(chave)));
+                    
+                    // Força a coluna "Pedidos" a ser a última das etapas do processo, ficando exatamente antes da coluna fixa "Status"
+                    const colPedidos = colunasReaisSetores.filter(c => c.toUpperCase().includes('PEDIDO'));
+                    if (colPedidos.length > 0) {
+                        colunasReaisSetores = colunasReaisSetores.filter(c => !c.toUpperCase().includes('PEDIDO'));
+                        colunasReaisSetores.push(...colPedidos);
+                    }
+
                     const colunaStatusOriginal = todasColunas.find(c => c.toUpperCase() === 'STATUS');
                     const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO'));
 
@@ -172,13 +230,14 @@
                         `;
 
                         let headerKanban = `
-                            <tr class="shadow-sm bg-gray-100">
-                                <th class="p-4 text-left bg-[#207c8d] text-white border-r border-[#196373] min-w-[200px] uppercase tracking-wider text-[11px] sticky left-0 z-40">Imóvel</th>
+                            <tr class="shadow-sm bg-gray-200">
+                                <th class="p-4 text-left bg-gray-200 text-black border-r border-gray-300 min-w-[350px] max-w-[450px] uppercase tracking-wider text-[11px] sticky left-0 z-40">Imóvel</th>
                         `;
                         colunasReaisSetores.forEach((setor) => {
-                            headerKanban += `<th class="p-3 bg-gray-100 text-navy text-center border-r border-gray-300 border-b-2 border-gold min-w-[120px] text-[10px] uppercase">${setor}</th>`;
+                            // Reverte a largura de pedidos para o normal e mantém as outras num padrão confortável
+                            headerKanban += `<th class="p-3 bg-gray-200 text-black text-center border-r border-gray-300 border-b-2 border-gold min-w-[120px] text-[10px] uppercase">${setor}</th>`;
                         });
-                        headerKanban += `<th class="p-3 bg-gray-50 text-navy text-center border-l-2 border-gray-300 min-w-[120px] text-[11px] uppercase shadow-sm">Status / Setor</th></tr>`;
+                        headerKanban += `<th class="p-3 bg-gray-200 text-black text-center border-l-2 border-gray-300 min-w-[120px] text-[11px] uppercase shadow-sm">Status / Setor</th></tr>`;
 
                         let contagemSetorAtual = {};
                         let linhasKanban = '';
@@ -188,7 +247,8 @@
                             let rowClass = isEven ? 'bg-gray-50/50' : 'bg-white';
 
                             linhasKanban += `<tr class="border-b border-gray-200 hover:bg-blue-50 transition-colors ${rowClass}">`;
-                            linhasKanban += `<td class="p-4 text-left font-bold text-white bg-[#2b8a9c] border-r border-[#196373] truncate max-w-[250px] shadow-sm sticky left-0 z-10" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>`;
+                            // Aumentada a largura da coluna imóvel no Kanban
+                            linhasKanban += `<td class="p-4 text-left font-bold text-white bg-[#2b8a9c] border-r border-[#196373] truncate min-w-[350px] max-w-[450px] shadow-sm sticky left-0 z-10" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>`;
                             
                             let setorAtualNome = 'NÃO INICIADO';
                             let setorAtualBg = 'bg-gray-200';
@@ -285,7 +345,7 @@
                     }
 
                     // =======================================================================
-                    // 2. DEMAIS ABAS (ESTIMATIVA, STATUS E OUTRAS) - GRÁFICOS EM BAIXO
+                    // 2. DEMAIS ABAS (ESTIMATIVA, STATUS, COORDENADAS E OUTRAS)
                     // =======================================================================
                     const colunasMenu = todasColunas.filter(c => {
                         const cUpper = c.toUpperCase().trim();
@@ -302,9 +362,13 @@
 
                     colunasMenu.forEach((coluna, index) => {
                         const idSecao = 'secao-' + index;
-                        const iconeClasse = icones[index % icones.length];
+                        let iconeClasse = icones[index % icones.length];
                         const isStatusTab = coluna.toUpperCase() === 'STATUS'; 
                         const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA');
+                        const isCoordenadasTab = coluna.toUpperCase().includes('COORDENADA');
+
+                        // Forçar ícone de mapa se for a aba Coordenadas
+                        if (isCoordenadasTab) iconeClasse = 'fa-map-location-dot';
 
                         menuLateral.innerHTML += `
                             <a href="#" onclick="showSection('${idSecao}', this, '${coluna}')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
@@ -370,8 +434,17 @@
                                 if(statusTexto.toLowerCase().includes('regular') || statusTexto.toLowerCase().includes('ativo')) corStatus = 'text-green-600 bg-green-100 px-2 py-1 rounded';
                                 else if(statusTexto.toLowerCase().includes('pendente') || statusTexto.toLowerCase().includes('irregular')) corStatus = 'text-orange-600 bg-orange-100 px-2 py-1 rounded';
                                 
-                                // Retornando para o span simples sem a div de rolagem, garantindo que não quebre linha e alinhe à esquerda
-                                valorColuna = `<span class="font-bold text-[10px] uppercase tracking-wider whitespace-nowrap inline-block ${corStatus}">${statusTexto}</span>`;
+                                // Quebra a linha livremente de acordo com o tamanho do texto, sem barra de rolagem
+                                valorColuna = `<span class="font-bold text-[10px] uppercase tracking-wider whitespace-normal inline-block ${corStatus}">${statusTexto}</span>`;
+                            }
+                            
+                            // Na aba Coordenadas, se tiver link longo tentar mostrar só um resumo (ou ícone)
+                            if (isCoordenadasTab) {
+                                let txtCoord = String(valorColuna).trim();
+                                if (txtCoord.length > 25 && txtCoord.startsWith('http')) {
+                                    // event.stopPropagation() garante que ao clicar no link ele não ative o voo do mapa junto
+                                    valorColuna = `<a href="${txtCoord}" target="_blank" onclick="event.stopPropagation()" class="text-blue-600 hover:underline flex items-center gap-1"><i class="fa-solid fa-map-location-dot"></i> Ver no Google Maps</a>`;
+                                }
                             }
 
                             let valorGrafico = String(linha[coluna] || 'Não Informado').trim();
@@ -395,19 +468,55 @@
                             let tdPagamentoHtml = '';
                             if (isEstimativaTab) {
                                 let valPagamento = colunaPagamentoOriginal ? (linha[colunaPagamentoOriginal] || '-') : '-';
-                                tdPagamentoHtml = `<td class="p-3 text-left text-gray-700 text-xs border-l border-gray-100">${valPagamento}</td>`;
+                                // Ajusta Forma de Pagamento para quebrar linha sem rolar e sem ficar muito pequena
+                                tdPagamentoHtml = `<td class="p-3 text-left text-gray-700 text-xs border-l border-gray-100 min-w-[250px] whitespace-normal">${valPagamento}</td>`;
+                            }
+
+                            // Verifica se é a aba de coordenadas para adicionar a interatividade do clique na linha
+                            let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
+                            let trOnClick = '';
+
+                            if (isCoordenadasTab) {
+                                let txtCoord = String(linha[coluna] || '').trim();
+                                let coords = window.parseCoordinates(txtCoord);
+                                // Se achou coordenada válida, transforma a linha inteira num botão que leva ao mapa
+                                if (coords && coords[0] >= -90 && coords[0] <= 90 && coords[1] >= -180 && coords[1] <= 180) {
+                                    trClasses += ' cursor-pointer hover:!bg-blue-100 hover:shadow-md relative z-10';
+                                    trOnClick = `onclick="focarNoMapa('secao-${index}', ${coords[0]}, ${coords[1]})" title="Clique para localizar no mapa"`;
+                                }
                             }
 
                             linhasTabela += `
-                                <tr class="${i % 2 === 0 ? 'bg-gray-50' : 'hover:bg-gray-100'} border-b border-gray-200 transition-colors">
+                                <tr class="${trClasses}" ${trOnClick}>
                                     ${tdOrdemStatus}
-                                    <td class="p-3 text-left font-bold text-navy truncate max-w-[200px]" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>
+                                    <td class="p-3 text-left font-bold text-navy truncate min-w-[350px] max-w-[450px]" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>
                                     ${colunasExtrasStatus}
                                     <td class="p-3 ${valAlign} text-gray-700 text-xs">${valorColuna}</td>
                                     ${tdPagamentoHtml}
                                 </tr>
                             `;
                         });
+
+                        // Se for a aba de Estimativa, anexa a linha "TOTAL" no fim da tabela com destaque
+                        if (isEstimativaTab && linhaTotal) {
+                            let valorTotalColuna = linhaTotal[coluna] || '-';
+                            if (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
+                                let v = String(valorTotalColuna).trim();
+                                if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
+                                let numValorT = parseFloat(v.replace(/[^\d.-]/g, ''));
+                                if (!isNaN(numValorT)) valorTotalColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValorT);
+                            }
+                            
+                            let valPagamentoTotal = colunaPagamentoOriginal ? (linhaTotal[colunaPagamentoOriginal] || '-') : '-';
+                            
+                            linhasTabela += `
+                                <tr class="bg-blue-50 border-t-2 border-blue-200 hover:bg-blue-100 transition-colors shadow-inner">
+                                    <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${linhaTotal['IMÓVEL'] || 'TOTAL'}</td>
+                                    <td class="p-4 text-center font-black text-navy text-sm">${valorTotalColuna}</td>
+                                    <td class="p-4 text-left font-bold text-navy text-xs border-l border-blue-100 min-w-[250px] whitespace-normal">${valPagamentoTotal}</td>
+                                </tr>
+                            `;
+                        }
 
                         let countIniciado = countStrictIniciado + countAndamento + countConcluido;
                         let valIniciado = valStrictIniciado + valAndamento + valConcluido;
@@ -459,10 +568,10 @@
                             headerTabelaHtml = `
                                 <tr>
                                     <th class="p-3 text-center border-r border-b border-gray-300 w-16">Ordem</th>
-                                    <th class="p-3 text-left w-1/3 border-b border-gray-300">Imóvel</th>
-                                    <th class="p-3 text-left border-b border-gray-300">Matrícula</th>
-                                    <th class="p-3 text-center border-b border-gray-300">Área</th>
-                                    <th class="p-3 text-left border-b border-gray-300">Status</th>
+                                    <th class="p-3 text-left border-b border-gray-300 min-w-[350px]">Imóvel</th>
+                                    <th class="p-3 text-left border-b border-gray-300 min-w-[150px]">Matrícula</th>
+                                    <th class="p-3 text-center border-b border-gray-300 w-24">Área</th>
+                                    <th class="p-3 text-left border-b border-gray-300 min-w-[250px]">Status</th>
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
@@ -470,20 +579,40 @@
                             let tituloPag = colunaPagamentoOriginal || 'Formas de Pagamentos';
                             headerTabelaHtml = `
                                 <tr>
-                                    <th class="p-3 text-left w-1/3 border-r border-white/20">Imóvel</th>
-                                    <th class="p-3 ${headerAlignColuna} border-r border-white/20">${coluna}</th>
-                                    <th class="p-3 text-left">${tituloPag}</th>
+                                    <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
+                                    <th class="p-3 ${headerAlignColuna} border-r border-gray-300 min-w-[150px]">${coluna}</th>
+                                    <th class="p-3 text-left min-w-[250px]">${tituloPag}</th>
                                 </tr>
                             `;
-                            theadClasses = 'uppercase text-[11px] bg-navy text-white shadow-sm';
+                            theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
                         } else {
                             headerTabelaHtml = `
                                 <tr>
-                                    <th class="p-3 text-left w-1/2 border-r border-white/20">Imóvel</th>
-                                    <th class="p-3 ${headerAlignColuna}">${coluna}</th>
+                                    <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
+                                    <th class="p-3 ${headerAlignColuna} min-w-[200px]">${coluna}</th>
                                 </tr>
                             `;
-                            theadClasses = 'uppercase text-[11px] bg-navy text-white shadow-sm';
+                            theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
+                        }
+                        
+                        // Bloco inferior dinâmico: Renderiza o Mapa ou o Gráfico
+                        let blockInferior = '';
+                        if (isCoordenadasTab) {
+                            blockInferior = `
+                            <div class="card p-8 flex flex-col items-center justify-center shadow-md">
+                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Mapa de Imóveis (${coluna})</h4>
+                                <div id="map-${idSecao}" class="h-[500px] w-full rounded-lg border border-gray-300 relative"></div>
+                            </div>
+                            `;
+                        } else if (!isStatusTab) {
+                            blockInferior = `
+                            <div class="card p-8 flex flex-col items-center justify-center shadow-md">
+                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${coluna}</h4>
+                                <div id="wrapper-chart-${idSecao}" class="h-80 w-full relative max-w-3xl mx-auto">
+                                    <canvas id="chart-${idSecao}"></canvas>
+                                </div>
+                            </div>
+                            `;
                         }
 
                         conteinerSecoes.innerHTML += `
@@ -504,14 +633,7 @@
                                         </div>
                                     </div>
 
-                                    ${!isStatusTab ? `
-                                    <div class="card p-8 flex flex-col items-center justify-center shadow-md">
-                                        <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${coluna}</h4>
-                                        <div id="wrapper-chart-${idSecao}" class="h-80 w-full relative max-w-3xl mx-auto">
-                                            <canvas id="chart-${idSecao}"></canvas>
-                                        </div>
-                                    </div>
-                                    ` : ''}
+                                    ${blockInferior}
                                 </div>
                             </section>
                         `;
@@ -570,121 +692,180 @@
                         });
                     }
 
-                    // Renderiza os Gráficos Normais
+                    // Renderiza os Gráficos ou Mapas Normais
                     colunasMenu.forEach((coluna, index) => {
                         const idSecao = 'secao-' + index;
-                        const canvas = document.getElementById(`chart-${idSecao}`);
+                        const isCoordenadasTab = coluna.toUpperCase().includes('COORDENADA');
                         
-                        if(canvas) {
-                            const isPizza = ['ÁREA', 'ESTIMATIVA', 'ALIENAÇÃO', 'PERMUTA', 'DESAPROPRIAÇÃO'].some(c => coluna.toUpperCase().includes(c));
-                            const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA');
-                            
-                            let labels = [];
-                            let values = [];
-
-                            if (isEstimativaTab) {
-                                let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
+                        if (isCoordenadasTab) {
+                            const mapContainer = document.getElementById(`map-${idSecao}`);
+                            if (mapContainer) {
+                                window.appMaps = window.appMaps || {};
                                 
-                                dados.forEach(d => {
-                                    let valStr = String(d[coluna] || '0').trim();
-                                    if (valStr.includes(',')) valStr = valStr.replace(/\./g, '').replace(',', '.');
-                                    let num = parseFloat(valStr.replace(/[^\d.-]/g, '')) || 0;
+                                // Inicializa o Mapa centrado em Olímpia-SP
+                                const map = L.map(mapContainer).setView([-20.7383, -48.9133], 13);
+                                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                                    maxZoom: 19,
+                                    attribution: '© OpenStreetMap contributors © CARTO'
+                                }).addTo(map);
 
-                                    let isBlank = true, hasX = false, lastIsV = false;
-                                    for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
-                                        let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
-                                        if (valCell !== '') {
-                                            if (isBlank) {
-                                                if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí')) lastIsV = true;
-                                            }
-                                            isBlank = false;
-                                            if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado')) hasX = true;
+                                let bounds = L.latLngBounds();
+                                let hasValidMarkers = false;
+
+                                window.appMarkers = window.appMarkers || {};
+
+                                dados.forEach(d => {
+                                    let coordStr = String(d[coluna] || '').trim();
+                                    let nomeImovel = d['IMÓVEL'] || 'Imóvel Sem Nome';
+                                    
+                                    let coords = window.parseCoordinates(coordStr);
+
+                                    // Adiciona o Ponto no Mapa
+                                    if (coords && coords.length === 2) {
+                                        let lat = coords[0];
+                                        let lng = coords[1];
+                                        
+                                        // Validação extra para ter certeza de que é uma coordenada lat/lng realista
+                                        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                                            let marker = L.marker([lat, lng]).addTo(map)
+                                                .bindPopup(`<div class="font-bold text-[12px] uppercase text-navy">${nomeImovel}</div>`)
+                                                .bindTooltip(`<div class="font-bold text-[10px] uppercase text-navy">${nomeImovel}</div>`, {
+                                                    direction: 'top', 
+                                                    offset: [0, -35],
+                                                    opacity: 0.95
+                                                });
+                                                
+                                            // Salva o marcador na memória para conseguir abrir ele depois pelo clique da tabela
+                                            window.appMarkers[`${idSecao}_${lat}_${lng}`] = marker;
+
+                                            bounds.extend([lat, lng]);
+                                            hasValidMarkers = true;
                                         }
                                     }
-                                    if (isBlank) valPen += num;
-                                    else if (lastIsV) valCon += num;
-                                    else if (hasX) valAnd += num;
-                                    else valIniStrict += num;
                                 });
 
-                                if (valPen > 0) { labels.push('Pendente'); values.push(valPen); }
-                                if (valIniStrict > 0) { labels.push('Apenas Iniciado'); values.push(valIniStrict); }
-                                if (valAnd > 0) { labels.push('Em Andamento'); values.push(valAnd); }
-                                if (valCon > 0) { labels.push('Concluído'); values.push(valCon); }
-                            } else {
-                                const contagem = {};
-                                dados.forEach(d => {
-                                    let v = String(d[coluna] || 'Não Informado').trim();
-                                    if(v.length > 35) v = v.substring(0, 35) + '...';
-                                    contagem[v] = (contagem[v] || 0) + 1;
-                                });
-                                labels = Object.keys(contagem);
-                                values = Object.values(contagem);
+                                // Se achou marcadores, ajusta a câmera do mapa para focar neles todos
+                                if (hasValidMarkers) {
+                                    setTimeout(() => { map.fitBounds(bounds, { padding: [40, 40] }); }, 500);
+                                }
+                                
+                                // Salva na memória para podermos redimensionar o mapa quando o usuário clicar na aba
+                                window.appMaps[idSecao] = map;
                             }
-                            
-                            if (!isPizza && labels.length > 15 && labels.length >= dados.length * 0.8) {
-                                document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
-                                    <div class="flex items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
-                                        <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i>
-                                        Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.
-                                    </div>
-                                `;
-                                return;
-                            }
+                        } 
+                        else {
+                            const canvas = document.getElementById(`chart-${idSecao}`);
+                            if(canvas) {
+                                const isPizza = ['ÁREA', 'ESTIMATIVA', 'ALIENAÇÃO', 'PERMUTA', 'DESAPROPRIAÇÃO'].some(c => coluna.toUpperCase().includes(c));
+                                const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA');
+                                
+                                let labels = [];
+                                let values = [];
 
-                            const gerarCores = (qtd) => {
-                                const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
-                                let cores = [];
-                                for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
-                                return cores;
-                            };
+                                if (isEstimativaTab) {
+                                    let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
+                                    
+                                    dados.forEach(d => {
+                                        let valStr = String(d[coluna] || '0').trim();
+                                        if (valStr.includes(',')) valStr = valStr.replace(/\./g, '').replace(',', '.');
+                                        let num = parseFloat(valStr.replace(/[^\d.-]/g, '')) || 0;
 
-                            let tipoGrafico = labels.length > 7 ? 'bar' : 'doughnut';
-                            if (isPizza) tipoGrafico = 'pie';
-                            
-                            new Chart(canvas.getContext('2d'), {
-                                type: tipoGrafico,
-                                data: {
-                                    labels: labels,
-                                    datasets: [{
-                                        label: 'Quantidade',
-                                        data: values,
-                                        backgroundColor: gerarCores(labels.length),
-                                        borderWidth: (tipoGrafico === 'bar' && labels.length > 7) ? 0 : 1,
-                                        borderColor: '#ffffff'
-                                    }]
-                                },
-                                options: {
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    plugins: {
-                                        legend: {
-                                            display: labels.length <= 20,
-                                            position: 'right',
-                                            labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
-                                        },
-                                        tooltip: {
-                                            backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                            titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
-                                            bodyFont: { family: "'Poppins', sans-serif", size: 12 },
-                                            padding: 12, cornerRadius: 8, displayColors: true,
-                                            callbacks: {
-                                                title: function(tooltipItems) { return tooltipItems[0].label; },
-                                                label: function(context) {
-                                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                    const porcentagem = ((context.raw / total) * 100).toFixed(1);
-                                                    if (isEstimativaTab) {
-                                                        const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
-                                                        return [`Valor Total: ${fmt}`, `Representa: ${porcentagem}%`];
-                                                    }
-                                                    return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                        let isBlank = true, hasX = false, lastIsV = false;
+                                        for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
+                                            let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
+                                            if (valCell !== '') {
+                                                if (isBlank) {
+                                                    if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí')) lastIsV = true;
                                                 }
+                                                isBlank = false;
+                                                if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado')) hasX = true;
                                             }
                                         }
-                                    },
-                                    scales: tipoGrafico === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { display: false } } : undefined
+                                        if (isBlank) valPen += num;
+                                        else if (lastIsV) valCon += num;
+                                        else if (hasX) valAnd += num;
+                                        else valIniStrict += num;
+                                    });
+
+                                    if (valPen > 0) { labels.push('Pendente'); values.push(valPen); }
+                                    if (valIniStrict > 0) { labels.push('Apenas Iniciado'); values.push(valIniStrict); }
+                                    if (valAnd > 0) { labels.push('Em Andamento'); values.push(valAnd); }
+                                    if (valCon > 0) { labels.push('Concluído'); values.push(valCon); }
+                                } else {
+                                    const contagem = {};
+                                    dados.forEach(d => {
+                                        let v = String(d[coluna] || 'Não Informado').trim();
+                                        if(v.length > 35) v = v.substring(0, 35) + '...';
+                                        contagem[v] = (contagem[v] || 0) + 1;
+                                    });
+                                    labels = Object.keys(contagem);
+                                    values = Object.values(contagem);
                                 }
-                            });
+                                
+                                if (!isPizza && labels.length > 15 && labels.length >= dados.length * 0.8) {
+                                    document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
+                                        <div class="flex items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
+                                            <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i>
+                                            Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.
+                                        </div>
+                                    `;
+                                    return;
+                                }
+
+                                const gerarCores = (qtd) => {
+                                    const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
+                                    let cores = [];
+                                    for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
+                                    return cores;
+                                };
+
+                                let tipoGrafico = labels.length > 7 ? 'bar' : 'doughnut';
+                                if (isPizza) tipoGrafico = 'pie';
+                                
+                                new Chart(canvas.getContext('2d'), {
+                                    type: tipoGrafico,
+                                    data: {
+                                        labels: labels,
+                                        datasets: [{
+                                            label: 'Quantidade',
+                                            data: values,
+                                            backgroundColor: gerarCores(labels.length),
+                                            borderWidth: (tipoGrafico === 'bar' && labels.length > 7) ? 0 : 1,
+                                            borderColor: '#ffffff'
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: {
+                                                display: labels.length <= 20,
+                                                position: 'right',
+                                                labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
+                                            },
+                                            tooltip: {
+                                                backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                                titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
+                                                bodyFont: { family: "'Poppins', sans-serif", size: 12 },
+                                                padding: 12, cornerRadius: 8, displayColors: true,
+                                                callbacks: {
+                                                    title: function(tooltipItems) { return tooltipItems[0].label; },
+                                                    label: function(context) {
+                                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                        const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                        if (isEstimativaTab) {
+                                                            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
+                                                            return [`Valor Total: ${fmt}`, `Representa: ${porcentagem}%`];
+                                                        }
+                                                        return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        scales: tipoGrafico === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { display: false } } : undefined
+                                    }
+                                });
+                            }
                         }
                     });
 
