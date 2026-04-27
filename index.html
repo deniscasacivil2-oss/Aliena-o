@@ -211,7 +211,8 @@
                     }
 
                     const colunaStatusOriginal = todasColunas.find(c => c.toUpperCase() === 'STATUS');
-                    const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO'));
+                    // Procura a coluna de pagamento apenas se ela estiver separada (não tiver Estimativa ou Valor no nome)
+                    const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO') && !c.toUpperCase().includes('ESTIMATIVA') && !c.toUpperCase().includes('VALOR'));
 
                     let labelsSetorAtual = [];
                     let valuesSetorAtual = [];
@@ -352,10 +353,15 @@
                         if (cUpper === 'IMÓVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
                         
                         if (cUpper === 'MATRÍCULA' || cUpper === 'MATRICULA' || cUpper === 'ÁREA' || cUpper === 'AREA' || cUpper === 'ORDEM') return false;
-                        if (cUpper.includes('ALIENAÇÃO') || cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA')) return false;
-                        if (cUpper.includes('PAGAMENTO')) return false;
+                        
+                        // Oculta a coluna que diz que o imóvel é alienação/permuta, desde que não seja a coluna de VALOR da alienação
+                        if ((cUpper.includes('ALIENAÇÃO') || cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIAÇÃO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
+                        
+                        // Oculta a coluna de Pagamento isolada, mas mantém se o nome incluir Estimativa/Valor
+                        if (cUpper.includes('PAGAMENTO') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('VALOR')) return false;
 
-                        return !chavesSetores.some(chave => cUpper.includes(chave));
+                        // Verifica se não faz parte das chaves de setores (mas não oculta se contiver a palavra VALOR ou ESTIMATIVA acidentalmente)
+                        return !chavesSetores.some(chave => cUpper.includes(chave) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('AVALIAÇÃO'));
                     });
 
                     const icones = ['fa-hashtag', 'fa-ruler', 'fa-money-bill-wave', 'fa-file-signature', 'fa-map-pin', 'fa-traffic-light', 'fa-chart-pie'];
@@ -364,7 +370,10 @@
                         const idSecao = 'secao-' + index;
                         let iconeClasse = icones[index % icones.length];
                         const isStatusTab = coluna.toUpperCase() === 'STATUS'; 
-                        const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA');
+                        
+                        // Atualizado: Reconhece a aba de estimativa também pelas palavras VALOR, R$ ou AVALIAÇÃO
+                        const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA') || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('AVALIAÇÃO') || coluna.toUpperCase().includes('AVALIACAO');
+                        
                         const isCoordenadasTab = coluna.toUpperCase().includes('COORDENADA');
 
                         // Forçar ícone de mapa se for a aba Coordenadas
@@ -466,8 +475,8 @@
                             }
 
                             let tdPagamentoHtml = '';
-                            if (isEstimativaTab) {
-                                let valPagamento = colunaPagamentoOriginal ? (linha[colunaPagamentoOriginal] || '-') : '-';
+                            if (isEstimativaTab && colunaPagamentoOriginal) {
+                                let valPagamento = linha[colunaPagamentoOriginal] || '-';
                                 // Ajusta Forma de Pagamento para quebrar linha sem rolar e sem ficar muito pequena
                                 tdPagamentoHtml = `<td class="p-3 text-left text-gray-700 text-xs border-l border-gray-100 min-w-[250px] whitespace-normal">${valPagamento}</td>`;
                             }
@@ -512,13 +521,13 @@
                                 if (!isNaN(numValorT)) valorTotalColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValorT);
                             }
                             
-                            let valPagamentoTotal = colunaPagamentoOriginal ? (linhaTotal[colunaPagamentoOriginal] || '-') : '-';
+                            let tdPagTotal = colunaPagamentoOriginal ? `<td class="p-4 text-left font-bold text-navy text-xs border-l border-blue-100 min-w-[250px] whitespace-normal">${linhaTotal[colunaPagamentoOriginal] || '-'}</td>` : '';
                             
                             linhasTabela += `
                                 <tr class="bg-blue-50 border-t-2 border-blue-200 hover:bg-blue-100 transition-colors shadow-inner">
                                     <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${linhaTotal['IMÓVEL'] || 'TOTAL'}</td>
                                     <td class="p-4 text-center font-black text-navy text-sm">${valorTotalColuna}</td>
-                                    <td class="p-4 text-left font-bold text-navy text-xs border-l border-blue-100 min-w-[250px] whitespace-normal">${valPagamentoTotal}</td>
+                                    ${tdPagTotal}
                                 </tr>
                             `;
                         }
@@ -581,12 +590,12 @@
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
                         } else if (isEstimativaTab) {
-                            let tituloPag = colunaPagamentoOriginal || 'Formas de Pagamentos';
+                            let tituloPag = colunaPagamentoOriginal ? `<th class="p-3 text-left min-w-[250px]">${colunaPagamentoOriginal}</th>` : '';
                             headerTabelaHtml = `
                                 <tr>
                                     <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
-                                    <th class="p-3 ${headerAlignColuna} border-r border-gray-300 min-w-[150px]">${coluna}</th>
-                                    <th class="p-3 text-left min-w-[250px]">${tituloPag}</th>
+                                    <th class="p-3 ${headerAlignColuna} ${colunaPagamentoOriginal ? 'border-r border-gray-300 min-w-[150px]' : 'min-w-[200px]'}">${coluna}</th>
+                                    ${tituloPag}
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
@@ -761,8 +770,9 @@
                         else {
                             const canvas = document.getElementById(`chart-${idSecao}`);
                             if(canvas) {
-                                const isPizza = ['ÁREA', 'ESTIMATIVA', 'ALIENAÇÃO', 'PERMUTA', 'DESAPROPRIAÇÃO'].some(c => coluna.toUpperCase().includes(c));
-                                const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA');
+                                // Expandido para incluir VALOR e AVALIAÇÃO para renderizar gráfico em formato de Pizza se for esse o caso
+                                const isPizza = ['ÁREA', 'ESTIMATIVA', 'VALOR', 'R$', 'AVALIAÇÃO', 'AVALIACAO', 'ALIENAÇÃO', 'PERMUTA', 'DESAPROPRIAÇÃO'].some(c => coluna.toUpperCase().includes(c));
+                                const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA') || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('AVALIAÇÃO') || coluna.toUpperCase().includes('AVALIACAO');
                                 
                                 let labels = [];
                                 let values = [];
