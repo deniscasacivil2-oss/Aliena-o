@@ -460,8 +460,8 @@
                                 let valMatricula = linha['MATRÍCULA'] || linha['MATRICULA'] || '-';
                                 let valArea = linha['ÁREA'] || linha['AREA'] || '-';
                                 colunasExtrasStatus = `
-                                    <td class="p-3 text-left text-gray-700 text-xs">${valMatricula}</td>
-                                    <td class="p-3 text-center text-gray-700 text-xs">${valArea}</td>
+                                    <td class="p-3 text-left text-gray-700 text-xs whitespace-normal min-w-[100px]">${valMatricula}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs whitespace-normal min-w-[80px]">${valArea}</td>
                                 `;
                             }
 
@@ -486,10 +486,15 @@
                                 }
                             }
 
+                            // Define larguras menores e permissão de quebra de linha para a coluna "Imóvel" exclusivamente na aba Status
+                            let classesImovelTD = isStatusTab 
+                                ? "p-3 text-left font-bold text-navy whitespace-normal min-w-[180px] max-w-[250px]" 
+                                : "p-3 text-left font-bold text-navy truncate min-w-[350px] max-w-[450px]";
+
                             linhasTabela += `
                                 <tr class="${trClasses}" ${trOnClick}>
                                     ${tdOrdemStatus}
-                                    <td class="p-3 text-left font-bold text-navy truncate min-w-[350px] max-w-[450px]" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>
+                                    <td class="${classesImovelTD}" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>
                                     ${colunasExtrasStatus}
                                     <td class="p-3 ${valAlign} text-gray-700 text-xs">${valorColuna}</td>
                                     ${tdPagamentoHtml}
@@ -567,11 +572,11 @@
                         if (isStatusTab) {
                             headerTabelaHtml = `
                                 <tr>
-                                    <th class="p-3 text-center border-r border-b border-gray-300 w-16">Ordem</th>
-                                    <th class="p-3 text-left border-b border-gray-300 min-w-[350px]">Imóvel</th>
-                                    <th class="p-3 text-left border-b border-gray-300 min-w-[150px]">Matrícula</th>
-                                    <th class="p-3 text-center border-b border-gray-300 w-24">Área</th>
-                                    <th class="p-3 text-left border-b border-gray-300 min-w-[250px]">Status</th>
+                                    <th class="p-3 text-center border-r border-b border-gray-300 w-12">Ordem</th>
+                                    <th class="p-3 text-left border-b border-gray-300 min-w-[180px]">Imóvel</th>
+                                    <th class="p-3 text-left border-b border-gray-300 min-w-[100px]">Matrícula</th>
+                                    <th class="p-3 text-center border-b border-gray-300 min-w-[80px]">Área</th>
+                                    <th class="p-3 text-left border-b border-gray-300 min-w-[150px]">Status</th>
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
