@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-pt">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -140,6 +140,30 @@
             }
         }
 
+        // --- SUPER EXTRATOR DE NÚMEROS (Trata R$, milhares com ponto, decimais) ---
+        window.parseDinheiro = function(valor) {
+            if (valor === null || valor === undefined || valor === '') return 0;
+            if (typeof valor === 'number') return valor;
+            let vStr = String(valor).trim();
+            
+            // Remove símbolo de moeda e espaços
+            vStr = vStr.replace(/[R$\s]/gi, '');
+            
+            // Se tiver vírgula, tratamos como padrão BR (1.500.000,00)
+            if (vStr.includes(',')) {
+                vStr = vStr.replace(/\./g, '').replace(',', '.');
+            } else {
+                // Se não tem vírgula, mas tem múltiplos pontos (1.500.000), os pontos são milhares
+                if ((vStr.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(vStr)) {
+                    vStr = vStr.replace(/\./g, '');
+                }
+            }
+            
+            // Retira o que sobrar de lixo e converte em número real
+            let num = parseFloat(vStr.replace(/[^\d.-]/g, ''));
+            return isNaN(num) ? 0 : num;
+        }
+
         // --- FUNÇÕES NOVAS PARA O MAPA DINÂMICO ---
         window.parseCoordinates = function(coordStr) {
             if (!coordStr) return null;
@@ -185,7 +209,8 @@
                 let linhaTotal = dadosCompletos.find(linha => {
                     const valImovel = String(linha['IMÓVEL'] || '').toUpperCase().trim();
                     const valOrdem = String(linha['ORDEM'] || linha['Ordem'] || '').toUpperCase().trim();
-                    return valImovel === 'TOTAL' || valImovel.startsWith('TOTAL') || valOrdem === 'TOTAL';
+                    // Refinamento: Só oculta se for exatamente 'TOTAL' ou começar com 'TOTAL ' (com espaço), protegendo imóveis chamados 'TOTAL VILLE'
+                    return valImovel === 'TOTAL' || valImovel.startsWith('TOTAL ') || valImovel.startsWith('TOTAL:') || valOrdem === 'TOTAL';
                 });
 
                 // Cria o array de dados principais sem a linha de Total (para não quebrar contagens e gráficos)
@@ -200,7 +225,8 @@
 
                     const todasColunas = Object.keys(dados[0]);
                     
-                    const chavesSetores = ['CASA CIVIL', 'PATRIMÔNIO', 'PATRIMONIO', 'OBRAS', 'LICITAÇÃO', 'LICITACAO', 'JURÍDICO', 'JURIDICO', 'PUBLICAÇÃO', 'PUBLICACAO', 'PEDIDOS', 'PEDIDO'];
+                    // Ampliado as raízes das palavras para não falhar (ex: apanha Jurídico, Jurídica, Licitação, Licitações, etc)
+                    const chavesSetores = ['CASA CIVIL', 'PATRIM', 'OBRA', 'LICITA', 'JURÍDIC', 'JURIDIC', 'PUBLICA', 'PEDIDO'];
                     let colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => c.toUpperCase().includes(chave)));
                     
                     // Move a coluna "Pedidos" para entre "Obras" e "Licitação"
@@ -209,15 +235,15 @@
                         // Remove pedidos do array temporariamente
                         colunasReaisSetores = colunasReaisSetores.filter(c => !c.toUpperCase().includes('PEDIDO'));
                         
-                        // Encontra a posição da coluna de Licitação
-                        let idxLicitacao = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('LICITAÇÃO') || c.toUpperCase().includes('LICITACAO'));
+                        // Encontra a posição da coluna de Licitação usando a raiz mais curta
+                        let idxLicitacao = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('LICITA'));
                         
                         if (idxLicitacao !== -1) {
                             // Insere Pedidos exatamente antes de Licitação
                             colunasReaisSetores.splice(idxLicitacao, 0, ...colPedidos);
                         } else {
                             // Se não achar licitação, tenta colocar depois de obras
-                            let idxObras = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('OBRAS'));
+                            let idxObras = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('OBRA'));
                             if (idxObras !== -1) {
                                 colunasReaisSetores.splice(idxObras + 1, 0, ...colPedidos);
                             } else {
@@ -229,6 +255,7 @@
                     const colunaStatusOriginal = todasColunas.find(c => c.toUpperCase() === 'STATUS');
                     // Procura a coluna de pagamento apenas se ela estiver separada (não tiver Estimativa ou Valor no nome)
                     const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO') && !c.toUpperCase().includes('ESTIMATIVA') && !c.toUpperCase().includes('VALOR'));
+                    const colunaCadastro = todasColunas.find(c => c.toUpperCase().trim() === 'CADASTRO MUNICIPAL');
 
                     let labelsSetorAtual = [];
                     let valuesSetorAtual = [];
@@ -277,30 +304,57 @@
                                 
                                 if (valorSetor !== '') {
                                     let vLower = valorSetor.toLowerCase();
-                                    let bg = 'bg-gray-100', txt = 'text-gray-600', icon = '';
+                                    let bg = 'bg-gray-100', txt = 'text-gray-600', iconClass = '';
                                     
-                                    if(vLower.includes('ok') || vLower.includes('concluído') || vLower.includes('concluido') || vLower.includes('feito') || vLower.includes('aprovado') || vLower === 'sim' || vLower === 'v') { 
-                                        bg = 'bg-[#1e8b78]'; txt = 'text-white'; icon = '<i class="fa-solid fa-check mr-1"></i>'; 
+                                    // Limpa o 'v' ou 'x' do texto para evitar duplicidade com o ícone do Dashboard
+                                    let textoDisplay = valorSetor;
+                                    if (vLower === 'v' || vLower === 'x' || vLower === '-') textoDisplay = '';
+                                    else if (vLower.startsWith('v ')) textoDisplay = valorSetor.substring(2).trim();
+                                    else if (vLower.startsWith('x ')) textoDisplay = valorSetor.substring(2).trim();
+                                    else if (/^v[-]?\d/.test(vLower)) textoDisplay = valorSetor.replace(/^v[-]?/i, '').trim();
+                                    else if (/^x[-]?\d/.test(vLower)) textoDisplay = valorSetor.replace(/^x[-]?/i, '').trim();
+
+                                    // Vocabulário expandido para englobar as condições típicas de Pedidos e Status do Google Sheets
+                                    if(vLower === '-') {
+                                        // Se for só um traço, mantém cinza claro sem ícone (é um placeholder da planilha)
                                     }
-                                    else if(vLower.includes('pendente') || vLower.includes('aguardando') || vLower.includes('parado') || vLower.includes('não') || vLower.includes('nao') || vLower === 'x') { 
-                                        bg = 'bg-[#d97706]'; txt = 'text-white'; icon = '<i class="fa-solid fa-xmark mr-1"></i>'; 
+                                    else if(vLower.includes('ok') || vLower.includes('concluíd') || vLower.includes('concluid') || vLower.includes('feito') || vLower.includes('aprovado') || vLower.includes('deferido') || vLower.includes('regular') || vLower.includes('ativo') || vLower === 'sim' || vLower === 'v' || vLower.startsWith('v ') || /^v[-]?\d/.test(vLower)) { 
+                                        bg = 'bg-[#1e8b78]'; txt = 'text-white'; iconClass = 'fa-solid fa-check'; 
                                     }
-                                    else if(vLower.includes('andamento') || vLower.includes('fazendo') || vLower.includes('análise') || vLower.includes('analise')) { 
-                                        bg = 'bg-[#0284c7]'; txt = 'text-white'; icon = '<i class="fa-solid fa-spinner mr-1 text-xs"></i>'; 
+                                    else if(vLower.includes('pendente') || vLower.includes('aguardando') || vLower.includes('parado') || vLower.includes('negado') || vLower.includes('indeferido') || vLower.includes('irregular') || vLower.includes('não') || vLower.includes('nao') || vLower === 'x' || vLower.startsWith('x ') || /^x[-]?\d/.test(vLower)) { 
+                                        bg = 'bg-[#d97706]'; txt = 'text-white'; iconClass = 'fa-solid fa-xmark'; 
                                     }
-                                    else if(vLower.includes('revisão') || vLower.includes('revisao')) {
-                                        bg = 'bg-[#eab308]'; txt = 'text-white'; icon = '<i class="fa-solid fa-magnifying-glass mr-1 text-xs"></i>';
+                                    else if(vLower.includes('andamento') || vLower.includes('fazendo') || vLower.includes('análise') || vLower.includes('analise') || vLower.includes('tramita')) { 
+                                        bg = 'bg-[#0284c7]'; txt = 'text-white'; iconClass = 'fa-solid fa-spinner'; 
+                                    }
+                                    else if(vLower.includes('revisão') || vLower.includes('revisao') || vLower.includes('estudo')) {
+                                        bg = 'bg-[#eab308]'; txt = 'text-white'; iconClass = 'fa-solid fa-magnifying-glass';
                                     }
                                     
-                                    setorAtualNome = setor;
-                                    setorAtualBg = bg;
-                                    setorAtualTxt = txt;
-                                    if(setorAtualBg === 'bg-gray-100') {
-                                        setorAtualBg = 'bg-[#607d8b]'; 
-                                        setorAtualTxt = 'text-white';
+                                    // A Lógica Perfeita: O Setor Atual é a última coluna na esteira que tiver texto VÁLIDO (ignora traços ou "n/a")
+                                    if (vLower !== '-' && vLower !== '.' && vLower !== 'n/a') {
+                                        setorAtualNome = setor;
+                                        setorAtualBg = bg;
+                                        setorAtualTxt = txt;
+                                        if(setorAtualBg === 'bg-gray-100') {
+                                            setorAtualBg = 'bg-[#607d8b]'; 
+                                            setorAtualTxt = 'text-white';
+                                        }
                                     }
 
-                                    content = `<div class="w-full py-1.5 px-1 rounded ${bg} ${txt} text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center justify-center text-center leading-tight min-h-[28px]">${icon} ${valorSetor}</div>`;
+                                    let iconHtml = '';
+                                    if (iconClass !== '') {
+                                        let extraClasses = '';
+                                        // Deixa ícones de carregamento/lupa menores
+                                        if (iconClass.includes('spinner') || iconClass.includes('magnifying-glass')) extraClasses += ' text-xs';
+                                        // Adiciona uma margem apenas se houver texto a seguir
+                                        if (textoDisplay !== '') extraClasses += ' mr-1';
+                                        iconHtml = `<i class="${iconClass}${extraClasses}"></i>`;
+                                    }
+
+                                    if (vLower !== '-') {
+                                        content = `<div class="w-full py-1.5 px-1 rounded ${bg} ${txt} text-[10px] font-bold uppercase tracking-wider shadow-sm flex items-center justify-center text-center leading-tight min-h-[28px]">${iconHtml}${iconHtml && textoDisplay ? ' ' : ''}${textoDisplay}</div>`;
+                                    }
                                 }
                                 
                                 linhasKanban += `<td class="p-2 text-center border-r border-gray-200 align-middle px-3">${content}</td>`;
@@ -368,7 +422,7 @@
                         const cUpper = c.toUpperCase().trim();
                         if (cUpper === 'IMÓVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
                         
-                        if (cUpper === 'MATRÍCULA' || cUpper === 'MATRICULA' || cUpper === 'ÁREA' || cUpper === 'AREA' || cUpper === 'ORDEM') return false;
+                        if (cUpper === 'MATRÍCULA' || cUpper === 'MATRICULA' || cUpper === 'ÁREA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL') return false;
                         
                         // Oculta a coluna que diz que o imóvel é alienação/permuta, desde que não seja a coluna de VALOR da alienação
                         if ((cUpper.includes('ALIENAÇÃO') || cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIAÇÃO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
@@ -423,27 +477,29 @@
                                 valAlign = 'text-center';
                             }
 
-                            if (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
-                                let v = String(valorColuna).trim();
-                                if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
-                                numValor = parseFloat(v.replace(/[^\d.-]/g, ''));
-                                
-                                if (!isNaN(numValor)) valorColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor);
-                                else numValor = 0;
+                            // Utiliza o novo extrator para qualquer aba de valor ou estimativa
+                            if (isEstimativaTab || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
+                                numValor = window.parseDinheiro(linha[coluna]);
+                                if (linha[coluna] && String(linha[coluna]).trim() !== '') {
+                                    valorColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor);
+                                } else {
+                                    valorColuna = '-';
+                                }
                             }
                             
                             if (isEstimativaTab) {
-                                let valorSomar = isNaN(numValor) ? 0 : numValor;
+                                let valorSomar = numValor;
                                 let isBlank = true, hasX = false, lastIsV = false;
 
                                 for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
                                     let valCell = String(linha[colunasReaisSetores[j]] || '').trim().toLowerCase();
-                                    if (valCell !== '') {
+                                    // Ignora traços e células vazias para encontrar o verdadeiro status final do imóvel
+                                    if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
                                         if (isBlank) {
-                                            if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí')) lastIsV = true;
+                                            if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
                                         }
                                         isBlank = false;
-                                        if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado')) hasX = true;
+                                        if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado') || valCell.startsWith('x ') || /^x[-]?\d/.test(valCell)) hasX = true;
                                     }
                                 }
 
@@ -497,6 +553,12 @@
                                 tdPagamentoHtml = `<td class="p-3 text-left text-gray-700 text-xs border-l border-gray-100 min-w-[250px] whitespace-normal">${valPagamento}</td>`;
                             }
 
+                            let tdCadastroHtml = '';
+                            if (isCoordenadasTab && colunaCadastro) {
+                                let valCadastro = linha[colunaCadastro] || '-';
+                                tdCadastroHtml = `<td class="p-3 text-left text-gray-700 text-xs border-r border-gray-100 min-w-[150px] whitespace-normal">${valCadastro}</td>`;
+                            }
+
                             // Verifica se é a aba de coordenadas para adicionar a interatividade do clique na linha
                             let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
                             let trOnClick = '';
@@ -521,6 +583,7 @@
                                     ${tdOrdemStatus}
                                     <td class="${classesImovelTD}" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>
                                     ${colunasExtrasStatus}
+                                    ${tdCadastroHtml}
                                     <td class="p-3 ${valAlign} text-gray-700 text-xs">${valorColuna}</td>
                                     ${tdPagamentoHtml}
                                 </tr>
@@ -530,11 +593,11 @@
                         // Se for a aba de Estimativa, anexa a linha "TOTAL" no fim da tabela com destaque
                         if (isEstimativaTab && linhaTotal) {
                             let valorTotalColuna = linhaTotal[coluna] || '-';
-                            if (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
-                                let v = String(valorTotalColuna).trim();
-                                if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.');
-                                let numValorT = parseFloat(v.replace(/[^\d.-]/g, ''));
-                                if (!isNaN(numValorT)) valorTotalColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValorT);
+                            if (isEstimativaTab || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
+                                let numValorT = window.parseDinheiro(linhaTotal[coluna]);
+                                if (linhaTotal[coluna] && String(linhaTotal[coluna]).trim() !== '') {
+                                    valorTotalColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValorT);
+                                }
                             }
                             
                             let tdPagTotal = colunaPagamentoOriginal ? `<td class="p-4 text-left font-bold text-navy text-xs border-l border-blue-100 min-w-[250px] whitespace-normal">${linhaTotal[colunaPagamentoOriginal] || '-'}</td>` : '';
@@ -612,6 +675,16 @@
                                     <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
                                     <th class="p-3 ${headerAlignColuna} ${colunaPagamentoOriginal ? 'border-r border-gray-300 min-w-[150px]' : 'min-w-[200px]'}">${coluna}</th>
                                     ${tituloPag}
+                                </tr>
+                            `;
+                            theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
+                        } else if (isCoordenadasTab) {
+                            let thCadastro = colunaCadastro ? `<th class="p-3 text-left border-r border-gray-300 min-w-[150px]">${colunaCadastro}</th>` : '';
+                            headerTabelaHtml = `
+                                <tr>
+                                    <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
+                                    ${thCadastro}
+                                    <th class="p-3 ${headerAlignColuna} min-w-[200px]">${coluna}</th>
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
@@ -764,7 +837,7 @@
                                                     offset: [0, -35],
                                                     opacity: 0.95
                                                 });
-                                                
+                                            
                                             // Salva o marcador na memória para conseguir abrir ele depois pelo clique da tabela
                                             window.appMarkers[`${idSecao}_${lat}_${lng}`] = marker;
 
@@ -797,19 +870,19 @@
                                     let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
                                     
                                     dados.forEach(d => {
-                                        let valStr = String(d[coluna] || '0').trim();
-                                        if (valStr.includes(',')) valStr = valStr.replace(/\./g, '').replace(',', '.');
-                                        let num = parseFloat(valStr.replace(/[^\d.-]/g, '')) || 0;
+                                        // Substituição para o extrator inteligente no gráfico também!
+                                        let num = window.parseDinheiro(d[coluna]);
 
                                         let isBlank = true, hasX = false, lastIsV = false;
                                         for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
                                             let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
-                                            if (valCell !== '') {
+                                            // Ignora traços e células vazias para encontrar o verdadeiro status final do imóvel
+                                            if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
                                                 if (isBlank) {
-                                                    if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí')) lastIsV = true;
+                                                    if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
                                                 }
                                                 isBlank = false;
-                                                if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado')) hasX = true;
+                                                if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado') || valCell.startsWith('x ') || /^x[-]?\d/.test(valCell)) hasX = true;
                                             }
                                         }
                                         if (isBlank) valPen += num;
