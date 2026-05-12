@@ -5,16 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Olímpia 2026</title>
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Leaflet.js (Mapas) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
@@ -30,31 +24,20 @@
         .section-content.active { display: block; animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .logo-container img { object-fit: contain; }
-        
-        /* Ocultar barras de rolagem nativas horizontais antigas */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* Nova Barra de Rolagem Horizontal (Customizada) para tabelas e status */
         .custom-scrollbar::-webkit-scrollbar { height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* Ajuste para a coluna Status preencher a célula */
         .status-cell { height: 1px; padding: 0 !important; }
         .status-cell > div { min-height: 100%; height: 100%; }
-        
-        /* Previne que o conteúdo interno do menu amasse quando encolhe */
         .sidebar-content { min-width: 256px; }
-
-        /* Ajuste do z-index do mapa para não sobrepor o cabeçalho e menu */
         .leaflet-container { z-index: 10 !important; font-family: 'Poppins', sans-serif; }
     </style>
 </head>
 <body class="flex min-h-screen">
 
-    <!-- Menu Lateral com Width Dinâmico e Transição -->
     <aside id="sidebar" class="sidebar text-white flex-shrink-0 flex flex-col transition-all duration-300 w-64 overflow-hidden h-screen sticky top-0 z-50">
         <div class="sidebar-content flex flex-col h-full">
             <div class="p-6 text-center border-b border-blue-900">
@@ -64,7 +47,6 @@
                 <h2 class="text-[10px] font-bold tracking-widest uppercase text-blue-100 leading-tight px-2">Relatório de Imóveis em Alienação</h2>
             </div>
             
-            <!-- Menu gerado dinamicamente via JS -->
             <nav id="menu-lateral" class="flex-grow p-4 space-y-2 mt-4 overflow-y-auto no-scrollbar">
                 <div class="animate-pulse flex items-center space-x-3 p-3">
                     <div class="rounded-full bg-blue-800 h-6 w-6"></div>
@@ -93,7 +75,6 @@
             </div>
         </header>
 
-        <!-- Seções geradas dinamicamente via JS -->
         <div id="conteiner-secoes" class="p-4 md:p-8 w-full mx-auto max-w-[1400px]">
             <div class="flex flex-col items-center justify-center h-64 text-navy mt-20">
                 <i class="fa-solid fa-spinner fa-spin text-5xl mb-4 text-gold"></i>
@@ -104,7 +85,17 @@
     </main>
 
     <script>
-        // Gestão Retrátil do Menu
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#39;',
+                '"': '&quot;'
+            }[tag] || tag));
+        }
+
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             if (sidebar.classList.contains('w-64')) {
@@ -114,10 +105,8 @@
             }
         }
 
-        // Integração com Google Sheets
         const url = 'https://script.google.com/macros/s/AKfycbyeLUtdqaGORufhdZ4oMz-U_reZz6p6eidArEdouUs2i7bF-fCmYeRRDiUu1GSAZtwg/exec';
 
-        // Função global para alternar abas
         window.showSection = function(sectionId, element, titulo) {
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
             element.classList.add('active');
@@ -127,44 +116,31 @@
 
             document.getElementById('page-title').innerText = titulo;
             
-            // Recalcula o tamanho do mapa caso exista na aba atual (para evitar que o mapa carregue quebrado em abas escondidas)
             if (window.appMaps && window.appMaps[sectionId]) {
-                setTimeout(() => {
-                    window.appMaps[sectionId].invalidateSize();
-                }, 50);
+                setTimeout(() => { window.appMaps[sectionId].invalidateSize(); }, 50);
             }
 
-            // Em ecrãs móveis, recolhe o menu automaticamente ao clicar numa aba
             if (window.innerWidth < 768) {
                 document.getElementById('sidebar').classList.replace('w-64', 'w-0');
             }
         }
 
-        // --- SUPER EXTRATOR DE NÚMEROS (Trata R$, milhares com ponto, decimais) ---
         window.parseDinheiro = function(valor) {
             if (valor === null || valor === undefined || valor === '') return 0;
             if (typeof valor === 'number') return valor;
             let vStr = String(valor).trim();
-            
-            // Remove símbolo de moeda e espaços
             vStr = vStr.replace(/[R$\s]/gi, '');
-            
-            // Se tiver vírgula, tratamos como padrão BR (1.500.000,00)
             if (vStr.includes(',')) {
                 vStr = vStr.replace(/\./g, '').replace(',', '.');
             } else {
-                // Se não tem vírgula, mas tem múltiplos pontos (1.500.000), os pontos são milhares
                 if ((vStr.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(vStr)) {
                     vStr = vStr.replace(/\./g, '');
                 }
             }
-            
-            // Retira o que sobrar de lixo e converte em número real
             let num = parseFloat(vStr.replace(/[^\d.-]/g, ''));
             return isNaN(num) ? 0 : num;
         }
 
-        // --- FUNÇÕES NOVAS PARA O MAPA DINÂMICO ---
         window.parseCoordinates = function(coordStr) {
             if (!coordStr) return null;
             let simpleMatch = coordStr.match(/(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
@@ -179,14 +155,9 @@
         window.focarNoMapa = function(idSecao, lat, lng) {
             if (window.appMaps && window.appMaps[idSecao]) {
                 const map = window.appMaps[idSecao];
-                // Faz a câmera voar suavemente até o local
                 map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
-                
-                // Aguarda o voo terminar (1.5s) e abre a etiqueta de nome do imóvel
                 if (window.appMarkers && window.appMarkers[`${idSecao}_${lat}_${lng}`]) {
-                    setTimeout(() => {
-                        window.appMarkers[`${idSecao}_${lat}_${lng}`].openPopup();
-                    }, 1500); 
+                    setTimeout(() => { window.appMarkers[`${idSecao}_${lat}_${lng}`].openPopup(); }, 1500); 
                 }
             }
         }
@@ -200,20 +171,17 @@
                 try {
                     dadosBrutos = JSON.parse(textoResposta);
                 } catch (parseErro) {
-                    throw new Error("O Google Script retornou HTML em vez de JSON. Verifique as permissões de implantação.");
+                    throw new Error("Invalid Format");
                 }
                 
                 let dadosCompletos = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
 
-                // Identifica e guarda a linha de "Total" para exibir apenas onde for necessário
                 let linhaTotal = dadosCompletos.find(linha => {
                     const valImovel = String(linha['IMÓVEL'] || '').toUpperCase().trim();
                     const valOrdem = String(linha['ORDEM'] || linha['Ordem'] || '').toUpperCase().trim();
-                    // Refinamento: Só oculta se for exatamente 'TOTAL' ou começar com 'TOTAL ' (com espaço), protegendo imóveis chamados 'TOTAL VILLE'
                     return valImovel === 'TOTAL' || valImovel.startsWith('TOTAL ') || valImovel.startsWith('TOTAL:') || valOrdem === 'TOTAL';
                 });
 
-                // Cria o array de dados principais sem a linha de Total (para não quebrar contagens e gráficos)
                 let dados = dadosCompletos.filter(linha => linha !== linhaTotal);
 
                 if (dados.length > 0) {
@@ -224,45 +192,33 @@
                     conteinerSecoes.innerHTML = '';
 
                     const todasColunas = Object.keys(dados[0]);
-                    
-                    // Ampliado as raízes das palavras para não falhar (ex: apanha Jurídico, Jurídica, Licitação, Licitações, etc)
                     const chavesSetores = ['CASA CIVIL', 'PATRIM', 'OBRA', 'LICITA', 'JURÍDIC', 'JURIDIC', 'PUBLICA', 'PEDIDO'];
                     let colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => c.toUpperCase().includes(chave)));
                     
-                    // Move a coluna "Pedidos" para entre "Obras" e "Licitação"
                     const colPedidos = colunasReaisSetores.filter(c => c.toUpperCase().includes('PEDIDO'));
                     if (colPedidos.length > 0) {
-                        // Remove pedidos do array temporariamente
                         colunasReaisSetores = colunasReaisSetores.filter(c => !c.toUpperCase().includes('PEDIDO'));
-                        
-                        // Encontra a posição da coluna de Licitação usando a raiz mais curta
                         let idxLicitacao = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('LICITA'));
                         
                         if (idxLicitacao !== -1) {
-                            // Insere Pedidos exatamente antes de Licitação
                             colunasReaisSetores.splice(idxLicitacao, 0, ...colPedidos);
                         } else {
-                            // Se não achar licitação, tenta colocar depois de obras
                             let idxObras = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('OBRA'));
                             if (idxObras !== -1) {
                                 colunasReaisSetores.splice(idxObras + 1, 0, ...colPedidos);
                             } else {
-                                colunasReaisSetores.push(...colPedidos); // fallback
+                                colunasReaisSetores.push(...colPedidos);
                             }
                         }
                     }
 
                     const colunaStatusOriginal = todasColunas.find(c => c.toUpperCase() === 'STATUS');
-                    // Procura a coluna de pagamento apenas se ela estiver separada (não tiver Estimativa ou Valor no nome)
                     const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO') && !c.toUpperCase().includes('ESTIMATIVA') && !c.toUpperCase().includes('VALOR'));
                     const colunaCadastro = todasColunas.find(c => c.toUpperCase().trim() === 'CADASTRO MUNICIPAL');
 
                     let labelsSetorAtual = [];
                     let valuesSetorAtual = [];
 
-                    // =======================================================================
-                    // 1. ABA "SETOR ATUAL" (KANBAN GRID + GRÁFICO EM BAIXO)
-                    // =======================================================================
                     if (colunasReaisSetores.length > 0) {
                         const idSecaoSetorAtual = 'secao-setor-atual';
                         
@@ -278,8 +234,7 @@
                                 <th class="p-4 text-left bg-gray-200 text-black border-r border-gray-300 min-w-[350px] max-w-[450px] uppercase tracking-wider text-[11px] sticky left-0 z-40">Imóvel</th>
                         `;
                         colunasReaisSetores.forEach((setor) => {
-                            // Reverte a largura de pedidos para o normal e mantém as outras num padrão confortável
-                            headerKanban += `<th class="p-3 bg-gray-200 text-black text-center border-r border-gray-300 border-b-2 border-gold min-w-[120px] text-[10px] uppercase">${setor}</th>`;
+                            headerKanban += `<th class="p-3 bg-gray-200 text-black text-center border-r border-gray-300 border-b-2 border-gold min-w-[120px] text-[10px] uppercase">${escapeHTML(setor)}</th>`;
                         });
                         headerKanban += `<th class="p-3 bg-gray-200 text-black text-center border-l-2 border-gray-300 min-w-[120px] text-[11px] uppercase shadow-sm">Status / Setor</th></tr>`;
 
@@ -289,34 +244,31 @@
                         dados.forEach((linha, idx) => {
                             let isEven = idx % 2 === 0;
                             let rowClass = isEven ? 'bg-gray-50/50' : 'bg-white';
+                            let imovelLimpo = escapeHTML(linha['IMÓVEL'] || '-');
 
                             linhasKanban += `<tr class="border-b border-gray-200 hover:bg-blue-50 transition-colors ${rowClass}">`;
-                            // Aumentada a largura da coluna imóvel no Kanban
-                            linhasKanban += `<td class="p-4 text-left font-bold text-white bg-[#2b8a9c] border-r border-[#196373] truncate min-w-[350px] max-w-[450px] shadow-sm sticky left-0 z-10" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>`;
+                            linhasKanban += `<td class="p-4 text-left font-bold text-white bg-[#2b8a9c] border-r border-[#196373] truncate min-w-[350px] max-w-[450px] shadow-sm sticky left-0 z-10" title="${imovelLimpo}">${imovelLimpo}</td>`;
                             
                             let setorAtualNome = 'NÃO INICIADO';
                             let setorAtualBg = 'bg-gray-200';
                             let setorAtualTxt = 'text-gray-500';
 
                             colunasReaisSetores.forEach(setor => {
-                                let valorSetor = String(linha[setor] || '').trim();
+                                let valorSetor = escapeHTML(String(linha[setor] || '').trim());
                                 let content = '<span class="text-gray-300 font-black">-</span>';
                                 
                                 if (valorSetor !== '') {
                                     let vLower = valorSetor.toLowerCase();
                                     let bg = 'bg-gray-100', txt = 'text-gray-600', iconClass = '';
-                                    
-                                    // Limpa o 'v' ou 'x' do texto para evitar duplicidade com o ícone do Dashboard
                                     let textoDisplay = valorSetor;
+                                    
                                     if (vLower === 'v' || vLower === 'x' || vLower === '-') textoDisplay = '';
                                     else if (vLower.startsWith('v ')) textoDisplay = valorSetor.substring(2).trim();
                                     else if (vLower.startsWith('x ')) textoDisplay = valorSetor.substring(2).trim();
                                     else if (/^v[-]?\d/.test(vLower)) textoDisplay = valorSetor.replace(/^v[-]?/i, '').trim();
                                     else if (/^x[-]?\d/.test(vLower)) textoDisplay = valorSetor.replace(/^x[-]?/i, '').trim();
 
-                                    // Vocabulário expandido para englobar as condições típicas de Pedidos e Status do Google Sheets
                                     if(vLower === '-') {
-                                        // Se for só um traço, mantém cinza claro sem ícone (é um placeholder da planilha)
                                     }
                                     else if(vLower.includes('ok') || vLower.includes('concluíd') || vLower.includes('concluid') || vLower.includes('feito') || vLower.includes('aprovado') || vLower.includes('deferido') || vLower.includes('regular') || vLower.includes('ativo') || vLower === 'sim' || vLower === 'v' || vLower.startsWith('v ') || /^v[-]?\d/.test(vLower)) { 
                                         bg = 'bg-[#1e8b78]'; txt = 'text-white'; iconClass = 'fa-solid fa-check'; 
@@ -331,7 +283,6 @@
                                         bg = 'bg-[#eab308]'; txt = 'text-white'; iconClass = 'fa-solid fa-magnifying-glass';
                                     }
                                     
-                                    // A Lógica Perfeita: O Setor Atual é a última coluna na esteira que tiver texto VÁLIDO (ignora traços ou "n/a")
                                     if (vLower !== '-' && vLower !== '.' && vLower !== 'n/a') {
                                         setorAtualNome = setor;
                                         setorAtualBg = bg;
@@ -345,9 +296,7 @@
                                     let iconHtml = '';
                                     if (iconClass !== '') {
                                         let extraClasses = '';
-                                        // Deixa ícones de carregamento/lupa menores
                                         if (iconClass.includes('spinner') || iconClass.includes('magnifying-glass')) extraClasses += ' text-xs';
-                                        // Adiciona uma margem apenas se houver texto a seguir
                                         if (textoDisplay !== '') extraClasses += ' mr-1';
                                         iconHtml = `<i class="${iconClass}${extraClasses}"></i>`;
                                     }
@@ -362,7 +311,7 @@
 
                             contagemSetorAtual[setorAtualNome] = (contagemSetorAtual[setorAtualNome] || 0) + 1;
 
-                            linhasKanban += `<td class="status-cell border-l-2 border-gray-300"><div class="w-full flex items-center justify-center p-3 font-bold uppercase text-[10px] tracking-wider text-center leading-tight shadow-inner ${setorAtualBg} ${setorAtualTxt}">${setorAtualNome}</div></td>`;
+                            linhasKanban += `<td class="status-cell border-l-2 border-gray-300"><div class="w-full flex items-center justify-center p-3 font-bold uppercase text-[10px] tracking-wider text-center leading-tight shadow-inner ${setorAtualBg} ${setorAtualTxt}">${escapeHTML(setorAtualNome)}</div></td>`;
                             linhasKanban += `</tr>`;
                         });
 
@@ -378,7 +327,7 @@
                             valuesSetorAtual.push(qtd);
                             cardsHtml += `
                                 <div class="card p-4 border-l-4 border-gold shadow-sm flex flex-col justify-center">
-                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate" title="${setor}">${setor}</p>
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate" title="${escapeHTML(setor)}">${escapeHTML(setor)}</p>
                                     <h3 class="text-2xl font-black text-navy mt-1">${qtd}</h3>
                                 </div>
                             `;
@@ -415,22 +364,12 @@
                         `;
                     }
 
-                    // =======================================================================
-                    // 2. DEMAIS ABAS (ESTIMATIVA, STATUS, COORDENADAS E OUTRAS)
-                    // =======================================================================
                     const colunasMenu = todasColunas.filter(c => {
                         const cUpper = c.toUpperCase().trim();
                         if (cUpper === 'IMÓVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
-                        
                         if (cUpper === 'MATRÍCULA' || cUpper === 'MATRICULA' || cUpper === 'ÁREA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL') return false;
-                        
-                        // Oculta a coluna que diz que o imóvel é alienação/permuta, desde que não seja a coluna de VALOR da alienação
                         if ((cUpper.includes('ALIENAÇÃO') || cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIAÇÃO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
-                        
-                        // Oculta a coluna de Pagamento isolada, mas mantém se o nome incluir Estimativa/Valor
                         if (cUpper.includes('PAGAMENTO') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('VALOR')) return false;
-
-                        // Verifica se não faz parte das chaves de setores (mas não oculta se contiver a palavra VALOR ou ESTIMATIVA acidentalmente)
                         return !chavesSetores.some(chave => cUpper.includes(chave) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('AVALIAÇÃO'));
                     });
 
@@ -440,19 +379,15 @@
                         const idSecao = 'secao-' + index;
                         let iconeClasse = icones[index % icones.length];
                         const isStatusTab = coluna.toUpperCase() === 'STATUS'; 
-                        
-                        // Atualizado: Reconhece a aba de estimativa também pelas palavras VALOR, R$ ou AVALIAÇÃO
                         const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA') || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('AVALIAÇÃO') || coluna.toUpperCase().includes('AVALIACAO');
-                        
                         const isCoordenadasTab = coluna.toUpperCase().includes('COORDENADA');
 
-                        // Forçar ícone de mapa se for a aba Coordenadas
                         if (isCoordenadasTab) iconeClasse = 'fa-map-location-dot';
 
                         menuLateral.innerHTML += `
-                            <a href="#" onclick="showSection('${idSecao}', this, '${coluna}')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                            <a href="#" onclick="showSection('${idSecao}', this, '${escapeHTML(coluna)}')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
                                 <i class="fa-solid ${iconeClasse} w-6 text-center"></i>
-                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">${coluna}</span>
+                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">${escapeHTML(coluna)}</span>
                             </a>
                         `;
 
@@ -465,9 +400,9 @@
                         let countConcluido = 0, valConcluido = 0;
 
                         dados.forEach((linha, i) => {
-                            let valorColuna = linha[coluna] || '-';
+                            let rawValorColuna = linha[coluna] || '-';
+                            let valorColuna = escapeHTML(rawValorColuna);
                             let numValor = 0;
-                            
                             let valAlign = 'text-left';
 
                             if (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('ÁREA') || coluna.toUpperCase().includes('AREA')) {
@@ -477,11 +412,10 @@
                                 valAlign = 'text-center';
                             }
 
-                            // Utiliza o novo extrator para qualquer aba de valor ou estimativa
                             if (isEstimativaTab || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
                                 numValor = window.parseDinheiro(linha[coluna]);
                                 if (linha[coluna] && String(linha[coluna]).trim() !== '') {
-                                    valorColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor);
+                                    valorColuna = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor));
                                 } else {
                                     valorColuna = '-';
                                 }
@@ -493,7 +427,6 @@
 
                                 for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
                                     let valCell = String(linha[colunasReaisSetores[j]] || '').trim().toLowerCase();
-                                    // Ignora traços e células vazias para encontrar o verdadeiro status final do imóvel
                                     if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
                                         if (isBlank) {
                                             if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
@@ -510,21 +443,17 @@
                             }
 
                             if(isStatusTab) {
-                                let statusTexto = linha['STATUS'] || '-';
+                                let statusTexto = escapeHTML(linha['STATUS'] || '-');
                                 let corStatus = 'text-gray-600';
                                 if(statusTexto.toLowerCase().includes('regular') || statusTexto.toLowerCase().includes('ativo')) corStatus = 'text-green-600 bg-green-100 px-2 py-1 rounded';
                                 else if(statusTexto.toLowerCase().includes('pendente') || statusTexto.toLowerCase().includes('irregular')) corStatus = 'text-orange-600 bg-orange-100 px-2 py-1 rounded';
-                                
-                                // Quebra a linha livremente de acordo com o tamanho do texto, sem barra de rolagem
                                 valorColuna = `<span class="font-bold text-[10px] uppercase tracking-wider whitespace-normal inline-block ${corStatus}">${statusTexto}</span>`;
                             }
                             
-                            // Na aba Coordenadas, se tiver link longo tentar mostrar só um resumo (ou ícone)
                             if (isCoordenadasTab) {
-                                let txtCoord = String(valorColuna).trim();
+                                let txtCoord = String(rawValorColuna).trim();
                                 if (txtCoord.length > 25 && txtCoord.startsWith('http')) {
-                                    // event.stopPropagation() garante que ao clicar no link ele não ative o voo do mapa junto
-                                    valorColuna = `<a href="${txtCoord}" target="_blank" onclick="event.stopPropagation()" class="text-blue-600 hover:underline flex items-center gap-1"><i class="fa-solid fa-map-location-dot"></i> Ver no Google Maps</a>`;
+                                    valorColuna = `<a href="${escapeHTML(txtCoord)}" target="_blank" onclick="event.stopPropagation()" class="text-blue-600 hover:underline flex items-center gap-1"><i class="fa-solid fa-map-location-dot"></i> Ver no Google Maps</a>`;
                                 }
                             }
 
@@ -535,11 +464,10 @@
                             let tdOrdemStatus = '';
                             let colunasExtrasStatus = '';
                             if (isStatusTab) {
-                                let valOrdem = linha['ORDEM'] || linha['Ordem'] || '-';
+                                let valOrdem = escapeHTML(linha['ORDEM'] || linha['Ordem'] || '-');
                                 tdOrdemStatus = `<td class="p-3 text-center text-gray-800 font-bold text-xs border-r border-gray-100">${valOrdem}</td>`;
-                                
-                                let valMatricula = linha['MATRÍCULA'] || linha['MATRICULA'] || '-';
-                                let valArea = linha['ÁREA'] || linha['AREA'] || '-';
+                                let valMatricula = escapeHTML(linha['MATRÍCULA'] || linha['MATRICULA'] || '-');
+                                let valArea = escapeHTML(linha['ÁREA'] || linha['AREA'] || '-');
                                 colunasExtrasStatus = `
                                     <td class="p-3 text-left text-gray-700 text-xs whitespace-normal min-w-[100px]">${valMatricula}</td>
                                     <td class="p-3 text-center text-gray-700 text-xs whitespace-normal min-w-[80px]">${valArea}</td>
@@ -548,32 +476,29 @@
 
                             let tdPagamentoHtml = '';
                             if (isEstimativaTab && colunaPagamentoOriginal) {
-                                let valPagamento = linha[colunaPagamentoOriginal] || '-';
-                                // Ajusta Forma de Pagamento para quebrar linha sem rolar e sem ficar muito pequena
+                                let valPagamento = escapeHTML(linha[colunaPagamentoOriginal] || '-');
                                 tdPagamentoHtml = `<td class="p-3 text-left text-gray-700 text-xs border-l border-gray-100 min-w-[250px] whitespace-normal">${valPagamento}</td>`;
                             }
 
                             let tdCadastroHtml = '';
                             if (isCoordenadasTab && colunaCadastro) {
-                                let valCadastro = linha[colunaCadastro] || '-';
+                                let valCadastro = escapeHTML(linha[colunaCadastro] || '-');
                                 tdCadastroHtml = `<td class="p-3 text-left text-gray-700 text-xs border-r border-gray-100 min-w-[150px] whitespace-normal">${valCadastro}</td>`;
                             }
 
-                            // Verifica se é a aba de coordenadas para adicionar a interatividade do clique na linha
                             let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
                             let trOnClick = '';
 
                             if (isCoordenadasTab) {
                                 let txtCoord = String(linha[coluna] || '').trim();
                                 let coords = window.parseCoordinates(txtCoord);
-                                // Se achou coordenada válida, transforma a linha inteira num botão que leva ao mapa
                                 if (coords && coords[0] >= -90 && coords[0] <= 90 && coords[1] >= -180 && coords[1] <= 180) {
                                     trClasses += ' cursor-pointer hover:!bg-blue-100 hover:shadow-md relative z-10';
                                     trOnClick = `onclick="focarNoMapa('secao-${index}', ${coords[0]}, ${coords[1]})" title="Clique para localizar no mapa"`;
                                 }
                             }
 
-                            // Define larguras menores e permissão de quebra de linha para a coluna "Imóvel" exclusivamente na aba Status
+                            let imovelLimpo = escapeHTML(linha['IMÓVEL'] || '-');
                             let classesImovelTD = isStatusTab 
                                 ? "p-3 text-left font-bold text-navy whitespace-normal min-w-[180px] max-w-[250px]" 
                                 : "p-3 text-left font-bold text-navy truncate min-w-[350px] max-w-[450px]";
@@ -581,7 +506,7 @@
                             linhasTabela += `
                                 <tr class="${trClasses}" ${trOnClick}>
                                     ${tdOrdemStatus}
-                                    <td class="${classesImovelTD}" title="${linha['IMÓVEL'] || '-'}">${linha['IMÓVEL'] || '-'}</td>
+                                    <td class="${classesImovelTD}" title="${imovelLimpo}">${imovelLimpo}</td>
                                     ${colunasExtrasStatus}
                                     ${tdCadastroHtml}
                                     <td class="p-3 ${valAlign} text-gray-700 text-xs">${valorColuna}</td>
@@ -590,21 +515,20 @@
                             `;
                         });
 
-                        // Se for a aba de Estimativa, anexa a linha "TOTAL" no fim da tabela com destaque
                         if (isEstimativaTab && linhaTotal) {
-                            let valorTotalColuna = linhaTotal[coluna] || '-';
+                            let valorTotalColuna = escapeHTML(linhaTotal[coluna] || '-');
                             if (isEstimativaTab || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
                                 let numValorT = window.parseDinheiro(linhaTotal[coluna]);
                                 if (linhaTotal[coluna] && String(linhaTotal[coluna]).trim() !== '') {
-                                    valorTotalColuna = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValorT);
+                                    valorTotalColuna = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValorT));
                                 }
                             }
-                            
-                            let tdPagTotal = colunaPagamentoOriginal ? `<td class="p-4 text-left font-bold text-navy text-xs border-l border-blue-100 min-w-[250px] whitespace-normal">${linhaTotal[colunaPagamentoOriginal] || '-'}</td>` : '';
+                            let pagTotalClean = escapeHTML(linhaTotal[colunaPagamentoOriginal] || '-');
+                            let tdPagTotal = colunaPagamentoOriginal ? `<td class="p-4 text-left font-bold text-navy text-xs border-l border-blue-100 min-w-[250px] whitespace-normal">${pagTotalClean}</td>` : '';
                             
                             linhasTabela += `
                                 <tr class="bg-blue-50 border-t-2 border-blue-200 hover:bg-blue-100 transition-colors shadow-inner">
-                                    <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${linhaTotal['IMÓVEL'] || 'TOTAL'}</td>
+                                    <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${escapeHTML(linhaTotal['IMÓVEL'] || 'TOTAL')}</td>
                                     <td class="p-4 text-center font-black text-navy text-sm">${valorTotalColuna}</td>
                                     ${tdPagTotal}
                                 </tr>
@@ -623,28 +547,28 @@
                                         <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Pendente (Vazio)</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countPendente} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
-                                            <span class="text-[9px] font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">${fmt.format(valPendente)}</span>
+                                            <span class="text-[9px] font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">${escapeHTML(fmt.format(valPendente))}</span>
                                         </div>
                                     </div>
                                     <div class="card p-4 border-l-4 border-blue-400 shadow-sm bg-white">
                                         <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Iniciado (Total)</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countIniciado} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
-                                            <span class="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">${fmt.format(valIniciado)}</span>
+                                            <span class="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">${escapeHTML(fmt.format(valIniciado))}</span>
                                         </div>
                                     </div>
                                     <div class="card p-4 border-l-4 border-orange-500 shadow-sm bg-white">
                                         <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Andamento (Tem X)</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countAndamento} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
-                                            <span class="text-[9px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded">${fmt.format(valAndamento)}</span>
+                                            <span class="text-[9px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded">${escapeHTML(fmt.format(valAndamento))}</span>
                                         </div>
                                     </div>
                                     <div class="card p-4 border-l-4 border-green-500 shadow-sm bg-white">
                                         <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Concluído (Final V)</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countConcluido} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
-                                            <span class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded">${fmt.format(valConcluido)}</span>
+                                            <span class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded">${escapeHTML(fmt.format(valConcluido))}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -653,7 +577,6 @@
 
                         let headerTabelaHtml = '';
                         let theadClasses = '';
-                        
                         let headerAlignColuna = (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('ÁREA') || coluna.toUpperCase().includes('AREA')) ? 'text-center' : 'text-left';
                         if (isEstimativaTab) { headerAlignColuna = 'text-center'; }
 
@@ -669,22 +592,22 @@
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
                         } else if (isEstimativaTab) {
-                            let tituloPag = colunaPagamentoOriginal ? `<th class="p-3 text-left min-w-[250px]">${colunaPagamentoOriginal}</th>` : '';
+                            let tituloPag = colunaPagamentoOriginal ? `<th class="p-3 text-left min-w-[250px]">${escapeHTML(colunaPagamentoOriginal)}</th>` : '';
                             headerTabelaHtml = `
                                 <tr>
                                     <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
-                                    <th class="p-3 ${headerAlignColuna} ${colunaPagamentoOriginal ? 'border-r border-gray-300 min-w-[150px]' : 'min-w-[200px]'}">${coluna}</th>
+                                    <th class="p-3 ${headerAlignColuna} ${colunaPagamentoOriginal ? 'border-r border-gray-300 min-w-[150px]' : 'min-w-[200px]'}">${escapeHTML(coluna)}</th>
                                     ${tituloPag}
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
                         } else if (isCoordenadasTab) {
-                            let thCadastro = colunaCadastro ? `<th class="p-3 text-left border-r border-gray-300 min-w-[150px]">${colunaCadastro}</th>` : '';
+                            let thCadastro = colunaCadastro ? `<th class="p-3 text-left border-r border-gray-300 min-w-[150px]">${escapeHTML(colunaCadastro)}</th>` : '';
                             headerTabelaHtml = `
                                 <tr>
                                     <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
                                     ${thCadastro}
-                                    <th class="p-3 ${headerAlignColuna} min-w-[200px]">${coluna}</th>
+                                    <th class="p-3 ${headerAlignColuna} min-w-[200px]">${escapeHTML(coluna)}</th>
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
@@ -692,25 +615,24 @@
                             headerTabelaHtml = `
                                 <tr>
                                     <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
-                                    <th class="p-3 ${headerAlignColuna} min-w-[200px]">${coluna}</th>
+                                    <th class="p-3 ${headerAlignColuna} min-w-[200px]">${escapeHTML(coluna)}</th>
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
                         }
                         
-                        // Bloco inferior dinâmico: Renderiza o Mapa ou o Gráfico
                         let blockInferior = '';
                         if (isCoordenadasTab) {
                             blockInferior = `
                             <div class="card p-8 flex flex-col items-center justify-center shadow-md">
-                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Mapa de Imóveis (${coluna})</h4>
+                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Mapa de Imóveis (${escapeHTML(coluna)})</h4>
                                 <div id="map-${idSecao}" class="h-[500px] w-full rounded-lg border border-gray-300 relative"></div>
                             </div>
                             `;
                         } else if (!isStatusTab) {
                             blockInferior = `
                             <div class="card p-8 flex flex-col items-center justify-center shadow-md">
-                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${coluna}</h4>
+                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${escapeHTML(coluna)}</h4>
                                 <div id="wrapper-chart-${idSecao}" class="h-80 w-full relative max-w-3xl mx-auto">
                                     <canvas id="chart-${idSecao}"></canvas>
                                 </div>
@@ -742,11 +664,9 @@
                         `;
                     });
 
-                    // Ativa a primeira aba do menu
                     const primeiroLink = document.querySelector('.nav-link');
                     if (primeiroLink) { primeiroLink.click(); }
 
-                    // Renderiza o Gráfico do Setor Atual (Distribuição Atual do Portfólio)
                     const canvasSetorAtual = document.getElementById('chart-setor-atual');
                     if (canvasSetorAtual && labelsSetorAtual.length > 0) {
                         const gerarCoresSetor = (qtd) => {
@@ -795,7 +715,6 @@
                         });
                     }
 
-                    // Renderiza os Gráficos ou Mapas Normais
                     colunasMenu.forEach((coluna, index) => {
                         const idSecao = 'secao-' + index;
                         const isCoordenadasTab = coluna.toUpperCase().includes('COORDENADA');
@@ -805,23 +724,17 @@
                             if (mapContainer) {
                                 window.appMaps = window.appMaps || {};
                                 
-                                // Inicializa o Mapa centrado em Olímpia-SP
                                 const map = L.map(mapContainer).setView([-20.7383, -48.9133], 13);
-                                
                                 const mapaRuas = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                                     maxZoom: 19,
                                     attribution: '© OpenStreetMap contributors © CARTO'
                                 });
-
                                 const mapaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                                     maxZoom: 19,
                                     attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
                                 });
 
-                                // Adiciona o mapa de ruas como padrão
                                 mapaRuas.addTo(map);
-
-                                // Adiciona o controle para o usuário alternar as visões
                                 L.control.layers({
                                     "Mapa de Ruas": mapaRuas,
                                     "Visão por Satélite": mapaSatelite
@@ -834,16 +747,12 @@
 
                                 dados.forEach(d => {
                                     let coordStr = String(d[coluna] || '').trim();
-                                    let nomeImovel = d['IMÓVEL'] || 'Imóvel Sem Nome';
-                                    
+                                    let nomeImovel = escapeHTML(d['IMÓVEL'] || 'Imóvel Sem Nome');
                                     let coords = window.parseCoordinates(coordStr);
 
-                                    // Adiciona o Ponto no Mapa
                                     if (coords && coords.length === 2) {
                                         let lat = coords[0];
                                         let lng = coords[1];
-                                        
-                                        // Validação extra para ter certeza de que é uma coordenada lat/lng realista
                                         if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
                                             let marker = L.marker([lat, lng]).addTo(map)
                                                 .bindPopup(`<div class="font-bold text-[12px] uppercase text-navy">${nomeImovel}</div>`)
@@ -852,29 +761,22 @@
                                                     offset: [0, -35],
                                                     opacity: 0.95
                                                 });
-                                            
-                                            // Salva o marcador na memória para conseguir abrir ele depois pelo clique da tabela
                                             window.appMarkers[`${idSecao}_${lat}_${lng}`] = marker;
-
                                             bounds.extend([lat, lng]);
                                             hasValidMarkers = true;
                                         }
                                     }
                                 });
 
-                                // Se achou marcadores, ajusta a câmera do mapa para focar neles todos
                                 if (hasValidMarkers) {
                                     setTimeout(() => { map.fitBounds(bounds, { padding: [40, 40] }); }, 500);
                                 }
-                                
-                                // Salva na memória para podermos redimensionar o mapa quando o usuário clicar na aba
                                 window.appMaps[idSecao] = map;
                             }
                         } 
                         else {
                             const canvas = document.getElementById(`chart-${idSecao}`);
                             if(canvas) {
-                                // Expandido para incluir VALOR e AVALIAÇÃO para renderizar gráfico em formato de Pizza se for esse o caso
                                 const isPizza = ['ÁREA', 'ESTIMATIVA', 'VALOR', 'R$', 'AVALIAÇÃO', 'AVALIACAO', 'ALIENAÇÃO', 'PERMUTA', 'DESAPROPRIAÇÃO'].some(c => coluna.toUpperCase().includes(c));
                                 const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA') || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('AVALIAÇÃO') || coluna.toUpperCase().includes('AVALIACAO');
                                 
@@ -885,13 +787,10 @@
                                     let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
                                     
                                     dados.forEach(d => {
-                                        // Substituição para o extrator inteligente no gráfico também!
                                         let num = window.parseDinheiro(d[coluna]);
-
                                         let isBlank = true, hasX = false, lastIsV = false;
                                         for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
                                             let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
-                                            // Ignora traços e células vazias para encontrar o verdadeiro status final do imóvel
                                             if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
                                                 if (isBlank) {
                                                     if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
@@ -913,7 +812,7 @@
                                 } else {
                                     const contagem = {};
                                     dados.forEach(d => {
-                                        let v = String(d[coluna] || 'Não Informado').trim();
+                                        let v = escapeHTML(String(d[coluna] || 'Não Informado').trim());
                                         if(v.length > 35) v = v.substring(0, 35) + '...';
                                         contagem[v] = (contagem[v] || 0) + 1;
                                     });
@@ -990,7 +889,7 @@
 
                 }
             } catch (erro) {
-                console.error("Erro ao processar dados:", erro);
+                console.error(erro);
                 document.getElementById('conteiner-secoes').innerHTML = `
                     <div class="text-center p-10 card w-full">
                         <i class="fa-solid fa-triangle-exclamation text-red-500 text-5xl mb-4"></i>
