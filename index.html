@@ -216,6 +216,16 @@
                     const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO') && !c.toUpperCase().includes('ESTIMATIVA') && !c.toUpperCase().includes('VALOR'));
                     const colunaCadastro = todasColunas.find(c => c.toUpperCase().trim() === 'CADASTRO MUNICIPAL');
 
+                    // Novas colunas para a aba Arrematados (Buscadores aprimorados)
+                    const colData = todasColunas.find(c => c.toUpperCase().includes('DATA') && c.toUpperCase().includes('ARREMAT')) || todasColunas.find(c => c.toUpperCase().trim() === 'DATA');
+                    const colArrematados = todasColunas.find(c => c.toUpperCase() === 'ARREMATADOS' || c.toUpperCase() === 'ARREMATADO');
+                    const colValorArremate = todasColunas.find(c => c.toUpperCase().includes('VALOR') && c.toUpperCase().includes('ARREMAT'));
+
+                    // Adiciona a coluna Arrematados no final da esteira do Setor Atual
+                    if (colArrematados && !colunasReaisSetores.includes(colArrematados)) {
+                        colunasReaisSetores.push(colArrematados);
+                    }
+
                     let labelsSetorAtual = [];
                     let valuesSetorAtual = [];
 
@@ -364,11 +374,123 @@
                         `;
                     }
 
+                    // Aba Customizada: Arrematados
+                    if (colArrematados || colValorArremate) {
+                        const idSecaoArrematados = 'secao-arrematados';
+
+                        menuLateral.innerHTML += `
+                            <a href="#" onclick="showSection('${idSecaoArrematados}', this, 'Arrematados')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                                <i class="fa-solid fa-gavel w-6 text-center"></i>
+                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">Arrematados</span>
+                            </a>
+                        `;
+
+                        let dadosArrematados = dados.filter(linha => {
+                            let vStatus = colArrematados ? String(linha[colArrematados] || '').trim().toLowerCase() : '';
+                            let vValor = colValorArremate ? String(linha[colValorArremate] || '').trim() : '';
+
+                            let temV = vStatus === 'v' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus) || vStatus === 'sim';
+                            
+                            let temValor = false;
+                            if (vValor !== '' && vValor !== '-') {
+                                let numValor = window.parseDinheiro(vValor);
+                                if (numValor > 0) temValor = true;
+                            }
+
+                            return temV || temValor;
+                        });
+
+                        let totalArrematado = 0;
+                        let linhasHtmlArrematados = '';
+
+                        dadosArrematados.forEach((linha, i) => {
+                            let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
+                            let imovel = escapeHTML(linha['IMÓVEL'] || '-');
+                            
+                            let valorArremateTexto = '-';
+                            if (colValorArremate && linha[colValorArremate]) {
+                                let numValor = window.parseDinheiro(linha[colValorArremate]);
+                                if (numValor > 0) {
+                                    valorArremateTexto = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor));
+                                    totalArrematado += numValor;
+                                }
+                            }
+
+                            // Filtro de Data para evitar que venha a hora ou o formato T00:00:00 ISO
+                            let dataTexto = '-';
+                            if (colData && linha[colData]) {
+                                let strDate = String(linha[colData]).trim();
+                                if (strDate.includes('T')) {
+                                    let partes = strDate.split('T')[0].split('-');
+                                    if (partes.length === 3) dataTexto = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                                } else if (strDate.includes(' ')) {
+                                    dataTexto = escapeHTML(strDate.split(' ')[0]);
+                                } else {
+                                    dataTexto = escapeHTML(strDate);
+                                }
+                            }
+
+                            let formaPagamento = colunaPagamentoOriginal ? escapeHTML(linha[colunaPagamentoOriginal] || '-') : '-';
+
+                            linhasHtmlArrematados += `
+                                <tr class="${trClasses}">
+                                    <td class="p-3 text-left font-bold text-navy truncate min-w-[350px] max-w-[450px]" title="${imovel}">${imovel}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs font-semibold">${valorArremateTexto}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs">${dataTexto}</td>
+                                    <td class="p-3 text-left text-gray-700 text-xs whitespace-normal min-w-[200px]">${formaPagamento}</td>
+                                </tr>
+                            `;
+                        });
+
+                        let tfootHtmlArrematados = '';
+                        if (totalArrematado > 0) {
+                            let totalFormatado = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalArrematado));
+                            tfootHtmlArrematados = `
+                                <tr class="bg-green-50 border-t-2 border-green-200 shadow-inner">
+                                    <td class="p-4 text-left font-black text-green-800 uppercase tracking-widest">TOTAL ARREMATADO</td>
+                                    <td class="p-4 text-center font-black text-green-800 text-sm">${totalFormatado}</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            `;
+                        } else if (dadosArrematados.length === 0) {
+                            linhasHtmlArrematados = `<tr><td colspan="4" class="p-6 text-center text-gray-500 italic">Nenhum imóvel arrematado encontrado.</td></tr>`;
+                        }
+
+                        conteinerSecoes.innerHTML += `
+                            <section id="${idSecaoArrematados}" class="section-content">
+                                <div class="card overflow-hidden shadow-md bg-white w-full">
+                                    <div class="w-full overflow-x-auto custom-scrollbar">
+                                        <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+                                            <thead class="uppercase text-[11px] bg-gray-200 text-black shadow-sm">
+                                                <tr>
+                                                    <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
+                                                    <th class="p-3 text-center border-r border-gray-300 min-w-[150px]">Valor Arrematado</th>
+                                                    <th class="p-3 text-center border-r border-gray-300 min-w-[120px]">Data</th>
+                                                    <th class="p-3 text-left min-w-[200px]">Forma de Pagamento</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="text-gray-800 font-medium">
+                                                ${linhasHtmlArrematados}
+                                                ${tfootHtmlArrematados}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </section>
+                        `;
+                    }
+
                     const colunasMenu = todasColunas.filter(c => {
                         const cUpper = c.toUpperCase().trim();
                         if (cUpper === 'IMÓVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
                         if (cUpper === 'MATRÍCULA' || cUpper === 'MATRICULA' || cUpper === 'ÁREA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL') return false;
                         if ((cUpper.includes('ALIENAÇÃO') || cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIAÇÃO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
+                        
+                        // Remover as colunas que agora pertencem exclusivamente à aba Arrematados
+                        if (colData && c === colData) return false;
+                        if (colArrematados && c === colArrematados) return false;
+                        if (colValorArremate && c === colValorArremate) return false;
+
                         if (cUpper.includes('PAGAMENTO') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('VALOR')) return false;
                         return !chavesSetores.some(chave => cUpper.includes(chave) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('AVALIAÇÃO'));
                     });
