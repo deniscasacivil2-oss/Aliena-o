@@ -96,6 +96,12 @@
             }[tag] || tag));
         }
 
+        // Função robusta para limpar nomes de colunas (tira acentos, espaços extras, etc.)
+        function normalizeStr(str) {
+            if (!str) return '';
+            return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+        }
+
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             if (sidebar.classList.contains('w-64')) {
@@ -105,7 +111,7 @@
             }
         }
 
-        const url = 'https://script.google.com/macros/s/AKfycbyeLUtdqaGORufhdZ4oMz-U_reZz6p6eidArEdouUs2i7bF-fCmYeRRDiUu1GSAZtwg/exec';
+        const url = 'https://script.google.com/macros/s/AKfycbxnNmixDLG8IeBBnamPT9WeLSbx2725YKnXhuX1Md2eiuZwQnGX1qmRayqM5YojSjZP/exec';
 
         window.showSection = function(sectionId, element, titulo) {
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
@@ -175,10 +181,10 @@
                     console.warn("Falha de rede (CORS ou Sandbox). Usando dados de demonstração.", fetchErro);
                     usandoMock = true;
                     const mockData = [
-                        { "ORDEM": "1", "IMÓVEL": "Terreno Central", "MATRÍCULA": "12345", "ÁREA": "500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 150.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "v", "JURÍDIC": "v", "COORDENADA": "-20.7383, -48.9133", "ARREMATADOS": "v", "VALOR ARREMATADO": "R$ 160.000,00", "DATA": "15/05/2026", "PAGAMENTO": "À vista", "CADASTRO MUNICIPAL": "11.22.33" },
+                        { "ORDEM": "1", "IMÓVEL": "Terreno Central", "MATRÍCULA": "12345", "ÁREA": "500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 150.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "v", "JURÍDIC": "v", "COORDENADA": "-20.7383, -48.9133", "ARREMATADOS": "v", "VALOR ARREMATADO": "R$ 160.000,00", "DATA": "15/05/2026", "PAGAMENTO": "À vista", "CADASTRO MUNICIPAL": "11.22.33", "LOTE": "01", "ARREMATANTE": "João Silva" },
                         { "ORDEM": "2", "IMÓVEL": "Prédio Antigo", "MATRÍCULA": "67890", "ÁREA": "1200 m²", "STATUS": "Pendente", "ESTIMATIVA": "R$ 850.000,00", "CASA CIVIL": "v", "OBRA": "x aguardando laudo", "LICITA": "-", "JURÍDIC": "-", "COORDENADA": "-20.7400, -48.9100", "ARREMATADOS": "-", "VALOR ARREMATADO": "-", "DATA": "-", "PAGAMENTO": "-", "CADASTRO MUNICIPAL": "44.55.66" },
-                        { "ORDEM": "3", "IMÓVEL": "Loteamento Novo", "MATRÍCULA": "54321", "ÁREA": "300 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 100.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "andamento", "JURÍDIC": "-", "COORDENADA": "-20.7350, -48.9200", "ARREMATADOS": "-", "VALOR ARREMATADO": "-", "DATA": "-", "PAGAMENTO": "-", "CADASTRO MUNICIPAL": "77.88.99" },
-                        { "ORDEM": "TOTAL", "IMÓVEL": "TOTAL", "ESTIMATIVA": "R$ 1.100.000,00", "VALOR ARREMATADO": "R$ 160.000,00" }
+                        { "ORDEM": "3", "IMÓVEL": "Loteamento Novo com descrição bem grande para testar a quebra de linha", "MATRÍCULA": "54321", "ÁREA": "300 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 100.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "andamento", "JURÍDIC": "-", "COORDENADA": "-20.7350, -48.9200", "ARREMATADOS": "v", "VALOR ARREMATADO": "120000", "DATA": "10/06/2026", "PAGAMENTO": "Parcelado em 12x", "CADASTRO MUNICIPAL": "77.88.99", "LOTE": "05", "ARREMATANTE": "Empresa XYZ Participações S.A." },
+                        { "ORDEM": "TOTAL", "IMÓVEL": "TOTAL", "ESTIMATIVA": "R$ 1.100.000,00", "VALOR ARREMATADO": "R$ 280.000,00" }
                     ];
                     textoResposta = JSON.stringify(mockData);
                 }
@@ -192,13 +198,26 @@
                 
                 let dadosCompletos = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
 
-                let linhaTotal = dadosCompletos.find(linha => {
-                    const valImovel = String(linha['IMÓVEL'] || '').toUpperCase().trim();
-                    const valOrdem = String(linha['ORDEM'] || linha['Ordem'] || '').toUpperCase().trim();
+                // Remove linhas completamente vazias
+                let dadosValidos = dadosCompletos.filter(linha => {
+                    let temInfo = false;
+                    Object.values(linha).forEach(val => {
+                        if (String(val).trim() !== '' && String(val).trim() !== '-') temInfo = true;
+                    });
+                    return temInfo;
+                });
+
+                let linhaTotal = dadosValidos.find(linha => {
+                    let keys = Object.keys(linha);
+                    let colImovel = keys.find(k => normalizeStr(k) === 'IMOVEL');
+                    let colOrdem = keys.find(k => normalizeStr(k) === 'ORDEM');
+                    
+                    const valImovel = colImovel ? String(linha[colImovel] || '').toUpperCase().trim() : '';
+                    const valOrdem = colOrdem ? String(linha[colOrdem] || '').toUpperCase().trim() : '';
                     return valImovel === 'TOTAL' || valImovel.startsWith('TOTAL ') || valImovel.startsWith('TOTAL:') || valOrdem === 'TOTAL';
                 });
 
-                let dados = dadosCompletos.filter(linha => linha !== linhaTotal);
+                let dados = dadosValidos.filter(linha => linha !== linhaTotal);
 
                 if (dados.length > 0) {
                     const menuLateral = document.getElementById('menu-lateral');
@@ -207,19 +226,30 @@
                     menuLateral.innerHTML = '';
                     conteinerSecoes.innerHTML = '';
 
-                    const todasColunas = Object.keys(dados[0]);
-                    const chavesSetores = ['CASA CIVIL', 'PATRIM', 'OBRA', 'LICITA', 'JURÍDIC', 'JURIDIC', 'PUBLICA', 'PEDIDO'];
-                    let colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => c.toUpperCase().includes(chave)));
+                    const colunasSet = new Set();
+                    dados.forEach(linha => Object.keys(linha).forEach(chave => colunasSet.add(chave)));
+                    const todasColunas = Array.from(colunasSet);
+
+                    // Pega o nome original da coluna baseado numa string normalizada (à prova de bala)
+                    const getCol = (nomesArray) => {
+                        return todasColunas.find(c => {
+                            let cleanC = normalizeStr(c);
+                            return nomesArray.some(nome => cleanC.includes(normalizeStr(nome)));
+                        });
+                    };
+
+                    const chavesSetores = ['CASA CIVIL', 'PATRIM', 'OBRA', 'LICITA', 'JURIDIC', 'PUBLICA', 'PEDIDO'];
+                    let colunasReaisSetores = todasColunas.filter(c => chavesSetores.some(chave => normalizeStr(c).includes(chave)));
                     
-                    const colPedidos = colunasReaisSetores.filter(c => c.toUpperCase().includes('PEDIDO'));
+                    const colPedidos = colunasReaisSetores.filter(c => normalizeStr(c).includes('PEDIDO'));
                     if (colPedidos.length > 0) {
-                        colunasReaisSetores = colunasReaisSetores.filter(c => !c.toUpperCase().includes('PEDIDO'));
-                        let idxLicitacao = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('LICITA'));
+                        colunasReaisSetores = colunasReaisSetores.filter(c => !normalizeStr(c).includes('PEDIDO'));
+                        let idxLicitacao = colunasReaisSetores.findIndex(c => normalizeStr(c).includes('LICITA'));
                         
                         if (idxLicitacao !== -1) {
                             colunasReaisSetores.splice(idxLicitacao, 0, ...colPedidos);
                         } else {
-                            let idxObras = colunasReaisSetores.findIndex(c => c.toUpperCase().includes('OBRA'));
+                            let idxObras = colunasReaisSetores.findIndex(c => normalizeStr(c).includes('OBRA'));
                             if (idxObras !== -1) {
                                 colunasReaisSetores.splice(idxObras + 1, 0, ...colPedidos);
                             } else {
@@ -228,19 +258,26 @@
                         }
                     }
 
-                    const colunaStatusOriginal = todasColunas.find(c => c.toUpperCase() === 'STATUS');
-                    const colunaPagamentoOriginal = todasColunas.find(c => c.toUpperCase().includes('PAGAMENTO') && !c.toUpperCase().includes('ESTIMATIVA') && !c.toUpperCase().includes('VALOR'));
-                    const colunaCadastro = todasColunas.find(c => c.toUpperCase().trim() === 'CADASTRO MUNICIPAL');
+                    const colunaStatusOriginal = getCol(['STATUS']);
+                    const colunaPagamentoOriginal = todasColunas.find(c => {
+                        let cn = normalizeStr(c);
+                        return cn.includes('PAGAMENTO') && !cn.includes('ESTIMATIVA') && !cn.includes('VALOR');
+                    });
+                    const colunaCadastro = getCol(['CADASTRO MUNICIPAL']);
 
-                    // Novas colunas para a aba Arrematados (Buscadores aprimorados)
-                    const colData = todasColunas.find(c => c.toUpperCase().includes('DATA') && c.toUpperCase().includes('ARREMAT')) || todasColunas.find(c => c.toUpperCase().trim() === 'DATA');
-                    const colArrematados = todasColunas.find(c => c.toUpperCase() === 'ARREMATADOS' || c.toUpperCase() === 'ARREMATADO');
-                    const colValorArremate = todasColunas.find(c => c.toUpperCase().includes('VALOR') && c.toUpperCase().includes('ARREMAT'));
-                    const colLote = todasColunas.find(c => c.toUpperCase().trim() === 'LOTE');
-                    const colArrematante = todasColunas.find(c => c.toUpperCase().includes('ARREMATANTE'));
-                    const colMatriculaGeral = todasColunas.find(c => c.toUpperCase().includes('MATRÍCULA') || c.toUpperCase().includes('MATRICULA'));
+                    // Buscadores robustos para a aba Lotes Arrematados
+                    const colArrematados = getCol(['ARREMATADOS', 'ARREMATADO']);
+                    const colLote = todasColunas.find(c => normalizeStr(c) === 'LOTE');
+                    const colArrematante = getCol(['ARREMATANTE']);
+                    const colLocal = todasColunas.find(c => normalizeStr(c) === 'LOCAL');
+                    const colValorPuro = todasColunas.find(c => normalizeStr(c) === 'VALOR');
+                    const colDataAdj = getCol(['ADJUDICACAO', 'HOMOLOGACAO']);
+                    const colImovelPrincipal = getCol(['IMOVEL']);
+                    
+                    // Colunas antigas da aba Arrematados (fallback)
+                    const colDataAntiga = todasColunas.find(c => normalizeStr(c) === 'DATA');
+                    const colValorArremateAntigo = todasColunas.find(c => normalizeStr(c).includes('VALOR') && normalizeStr(c).includes('ARREMAT'));
 
-                    // Adiciona a coluna Arrematados no final da esteira do Setor Atual
                     if (colArrematados && !colunasReaisSetores.includes(colArrematados)) {
                         colunasReaisSetores.push(colArrematados);
                     }
@@ -269,11 +306,18 @@
 
                         let contagemSetorAtual = {};
                         let linhasKanban = '';
+                        let kanbanRowIdx = 0;
                         
                         dados.forEach((linha, idx) => {
-                            let isEven = idx % 2 === 0;
+                            let imovelVal = linha[colImovelPrincipal] || linha['IMÓVEL'] || linha['IMOVEL'];
+                            let imovelLimpo = escapeHTML(imovelVal || '-');
+                            
+                            // Se a linha não tem a coluna Imóvel (veio da aba Lotes Arrematados), ignorar no Kanban
+                            if (!imovelVal || String(imovelVal).trim() === '' || imovelLimpo === '-') return;
+
+                            let isEven = kanbanRowIdx % 2 === 0;
+                            kanbanRowIdx++;
                             let rowClass = isEven ? 'bg-gray-50/50' : 'bg-white';
-                            let imovelLimpo = escapeHTML(linha['IMÓVEL'] || '-');
 
                             linhasKanban += `<tr class="border-b border-gray-200 hover:bg-blue-50 transition-colors ${rowClass}">`;
                             linhasKanban += `<td class="p-4 text-left font-bold text-white bg-[#2b8a9c] border-r border-[#196373] truncate min-w-[350px] max-w-[450px] shadow-sm sticky left-0 z-10" title="${imovelLimpo}">${imovelLimpo}</td>`;
@@ -347,7 +391,7 @@
                         let cardsHtml = `
                             <div class="card p-4 border-l-4 border-navy shadow-sm flex flex-col justify-center">
                                 <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total de Imóveis</p>
-                                <h3 class="text-3xl font-black text-navy mt-1">${dados.length}</h3>
+                                <h3 class="text-3xl font-black text-navy mt-1">${Object.values(contagemSetorAtual).reduce((a,b)=>a+b,0)}</h3>
                             </div>
                         `;
                         
@@ -394,18 +438,18 @@
                     }
 
                     const colunasMenu = todasColunas.filter(c => {
-                        const cUpper = c.toUpperCase().trim();
-                        if (cUpper === 'IMÓVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
-                        if (cUpper === 'MATRÍCULA' || cUpper === 'MATRICULA' || cUpper === 'ÁREA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL' || cUpper === 'LOTE' || cUpper.includes('ARREMATANTE')) return false;
-                        if ((cUpper.includes('ALIENAÇÃO') || cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIAÇÃO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
+                        const cUpper = normalizeStr(c);
+                        if (cUpper === 'IMOVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
+                        if (cUpper === 'MATRICULA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL' || cUpper === 'LOTE' || cUpper.includes('ARREMATANTE')) return false;
+                        if (cUpper === 'LOCAL' || cUpper === 'VALOR' || cUpper.includes('ADJUDICACAO') || cUpper.includes('HOMOLOGACAO')) return false;
+                        if ((cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIACAO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
                         
-                        // Remover as colunas que agora pertencem exclusivamente à aba Arrematados
-                        if (colData && c === colData) return false;
+                        if (colDataAntiga && c === colDataAntiga) return false;
                         if (colArrematados && c === colArrematados) return false;
-                        if (colValorArremate && c === colValorArremate) return false;
+                        if (colValorArremateAntigo && c === colValorArremateAntigo) return false;
 
                         if (cUpper.includes('PAGAMENTO') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('VALOR')) return false;
-                        return !chavesSetores.some(chave => cUpper.includes(chave) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('AVALIAÇÃO'));
+                        return !chavesSetores.some(chave => cUpper.includes(chave) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('AVALIACAO'));
                     });
 
                     const icones = ['fa-hashtag', 'fa-ruler', 'fa-money-bill-wave', 'fa-file-signature', 'fa-map-pin', 'fa-traffic-light', 'fa-chart-pie'];
@@ -413,9 +457,11 @@
                     colunasMenu.forEach((coluna, index) => {
                         const idSecao = 'secao-' + index;
                         let iconeClasse = icones[index % icones.length];
-                        const isStatusTab = coluna.toUpperCase() === 'STATUS'; 
-                        const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA') || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('AVALIAÇÃO') || coluna.toUpperCase().includes('AVALIACAO');
-                        const isCoordenadasTab = coluna.toUpperCase().includes('COORDENADA');
+                        const cNorm = normalizeStr(coluna);
+
+                        const isStatusTab = cNorm === 'STATUS'; 
+                        const isEstimativaTab = cNorm.includes('ESTIMATIVA') || cNorm.includes('VALOR') || cNorm.includes('R$') || cNorm.includes('AVALIACAO');
+                        const isCoordenadasTab = cNorm.includes('COORDENADA');
 
                         if (isCoordenadasTab) iconeClasse = 'fa-map-location-dot';
 
@@ -433,21 +479,28 @@
                         let countStrictIniciado = 0, valStrictIniciado = 0;
                         let countAndamento = 0, valAndamento = 0;
                         let countConcluido = 0, valConcluido = 0;
+                        let tabelaRowIdx = 0;
 
                         dados.forEach((linha, i) => {
+                            let imovelVal = linha[colImovelPrincipal] || linha['IMÓVEL'] || linha['IMOVEL'];
+                            let imovelLimpo = escapeHTML(imovelVal || '-');
+                            
+                            // Se a linha não tem a coluna Imóvel (veio da aba Lotes Arrematados), ignorar nas abas genéricas
+                            if (!imovelVal || String(imovelVal).trim() === '' || imovelLimpo === '-') return;
+
                             let rawValorColuna = linha[coluna] || '-';
                             let valorColuna = escapeHTML(rawValorColuna);
                             let numValor = 0;
                             let valAlign = 'text-left';
 
-                            if (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('ÁREA') || coluna.toUpperCase().includes('AREA')) {
+                            if (cNorm.includes('VALOR') || cNorm.includes('R$') || cNorm.includes('AREA')) {
                                 valAlign = 'text-center';
                             }
                             if (isEstimativaTab) {
                                 valAlign = 'text-center';
                             }
 
-                            if (isEstimativaTab || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
+                            if (isEstimativaTab || cNorm.includes('VALOR') || cNorm.includes('R$')) {
                                 numValor = window.parseDinheiro(linha[coluna]);
                                 if (linha[coluna] && String(linha[coluna]).trim() !== '') {
                                     valorColuna = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor));
@@ -478,7 +531,7 @@
                             }
 
                             if(isStatusTab) {
-                                let statusTexto = escapeHTML(linha['STATUS'] || '-');
+                                let statusTexto = escapeHTML(linha[coluna] || '-');
                                 let corStatus = 'text-gray-600';
                                 if(statusTexto.toLowerCase().includes('regular') || statusTexto.toLowerCase().includes('ativo')) corStatus = 'text-green-600 bg-green-100 px-2 py-1 rounded';
                                 else if(statusTexto.toLowerCase().includes('pendente') || statusTexto.toLowerCase().includes('irregular')) corStatus = 'text-orange-600 bg-orange-100 px-2 py-1 rounded';
@@ -499,10 +552,14 @@
                             let tdOrdemStatus = '';
                             let colunasExtrasStatus = '';
                             if (isStatusTab) {
-                                let valOrdem = escapeHTML(linha['ORDEM'] || linha['Ordem'] || '-');
+                                let colOrdem = getCol(['ORDEM']);
+                                let colMatricula = getCol(['MATRICULA']);
+                                let colArea = getCol(['AREA']);
+                                
+                                let valOrdem = escapeHTML(colOrdem ? linha[colOrdem] : '-');
                                 tdOrdemStatus = `<td class="p-3 text-center text-gray-800 font-bold text-xs border-r border-gray-100">${valOrdem}</td>`;
-                                let valMatricula = escapeHTML(linha['MATRÍCULA'] || linha['MATRICULA'] || '-');
-                                let valArea = escapeHTML(linha['ÁREA'] || linha['AREA'] || '-');
+                                let valMatricula = escapeHTML(colMatricula ? linha[colMatricula] : '-');
+                                let valArea = escapeHTML(colArea ? linha[colArea] : '-');
                                 colunasExtrasStatus = `
                                     <td class="p-3 text-left text-gray-700 text-xs whitespace-normal min-w-[100px]">${valMatricula}</td>
                                     <td class="p-3 text-center text-gray-700 text-xs whitespace-normal min-w-[80px]">${valArea}</td>
@@ -521,7 +578,8 @@
                                 tdCadastroHtml = `<td class="p-3 text-left text-gray-700 text-xs border-r border-gray-100 min-w-[150px] whitespace-normal">${valCadastro}</td>`;
                             }
 
-                            let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
+                            let trClasses = `${tabelaRowIdx % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
+                            tabelaRowIdx++;
                             let trOnClick = '';
 
                             if (isCoordenadasTab) {
@@ -533,7 +591,6 @@
                                 }
                             }
 
-                            let imovelLimpo = escapeHTML(linha['IMÓVEL'] || '-');
                             let classesImovelTD = isStatusTab 
                                 ? "p-3 text-left font-bold text-navy whitespace-normal min-w-[180px] max-w-[250px]" 
                                 : "p-3 text-left font-bold text-navy truncate min-w-[350px] max-w-[450px]";
@@ -563,7 +620,7 @@
                             
                             linhasTabela += `
                                 <tr class="bg-blue-50 border-t-2 border-blue-200 hover:bg-blue-100 transition-colors shadow-inner">
-                                    <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${escapeHTML(linhaTotal['IMÓVEL'] || 'TOTAL')}</td>
+                                    <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${escapeHTML(linhaTotal[colImovelPrincipal] || linhaTotal['IMÓVEL'] || 'TOTAL')}</td>
                                     <td class="p-4 text-center font-black text-navy text-sm">${valorTotalColuna}</td>
                                     ${tdPagTotal}
                                 </tr>
@@ -612,7 +669,7 @@
 
                         let headerTabelaHtml = '';
                         let theadClasses = '';
-                        let headerAlignColuna = (coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('ÁREA') || coluna.toUpperCase().includes('AREA')) ? 'text-center' : 'text-left';
+                        let headerAlignColuna = (cNorm.includes('VALOR') || cNorm.includes('R$') || cNorm.includes('AREA')) ? 'text-center' : 'text-left';
                         if (isEstimativaTab) { headerAlignColuna = 'text-center'; }
 
                         if (isStatusTab) {
@@ -699,30 +756,33 @@
                         `;
                     });
 
-                    // Aba Customizada: Arrematados
-                    if (colArrematados || colValorArremate) {
+                    // Aba Customizada: Lotes Arrematados
+                    if (colArrematados || colValorArremateAntigo || colLote || colArrematante || colLocal || colValorPuro || colDataAdj) {
                         const idSecaoArrematados = 'secao-arrematados';
 
                         menuLateral.innerHTML += `
-                            <a href="#" onclick="showSection('${idSecaoArrematados}', this, 'Arrematados')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                            <a href="#" onclick="showSection('${idSecaoArrematados}', this, 'Lotes Arrematados')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
                                 <i class="fa-solid fa-gavel w-6 text-center"></i>
-                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">Arrematados</span>
+                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">Lotes Arrematados</span>
                             </a>
                         `;
 
                         let dadosArrematados = dados.filter(linha => {
                             let vStatus = colArrematados ? String(linha[colArrematados] || '').trim().toLowerCase() : '';
-                            let vValor = colValorArremate ? String(linha[colValorArremate] || '').trim() : '';
+                            let temLote = colLote && linha[colLote] && String(linha[colLote]).trim() !== '-' && String(linha[colLote]).trim() !== '';
+                            let temArrematante = colArrematante && linha[colArrematante] && String(linha[colArrematante]).trim() !== '-' && String(linha[colArrematante]).trim() !== '';
+                            let temLocal = colLocal && linha[colLocal] && String(linha[colLocal]).trim() !== '-' && String(linha[colLocal]).trim() !== '';
+                            let temValorPuro = colValorPuro && linha[colValorPuro] && String(linha[colValorPuro]).trim() !== '-' && String(linha[colValorPuro]).trim() !== '';
 
                             let temV = vStatus === 'v' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus) || vStatus === 'sim';
                             
-                            let temValor = false;
-                            if (vValor !== '' && vValor !== '-') {
-                                let numValor = window.parseDinheiro(vValor);
-                                if (numValor > 0) temValor = true;
+                            let vValorAntigo = colValorArremateAntigo ? String(linha[colValorArremateAntigo] || '').trim() : '';
+                            let temValorAntigo = false;
+                            if (vValorAntigo !== '' && vValorAntigo !== '-') {
+                                if (window.parseDinheiro(vValorAntigo) > 0) temValorAntigo = true;
                             }
 
-                            return temV || temValor;
+                            return temV || temValorAntigo || temArrematante || temLote || temLocal || temValorPuro;
                         });
 
                         let totalArrematado = 0;
@@ -730,15 +790,15 @@
 
                         dadosArrematados.forEach((linha, i) => {
                             let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
-                            let imovel = escapeHTML(linha['IMÓVEL'] || '-');
                             
-                            let matriculaTexto = colMatriculaGeral ? escapeHTML(linha[colMatriculaGeral] || '-') : escapeHTML(linha['MATRÍCULA'] || linha['MATRICULA'] || '-');
-                            let loteTexto = colLote ? escapeHTML(linha[colLote] || '-') : '-';
                             let arrematanteTexto = colArrematante ? escapeHTML(linha[colArrematante] || '-') : '-';
+                            let loteTexto = colLote ? escapeHTML(linha[colLote] || '-') : '-';
+                            let localTexto = colLocal && linha[colLocal] ? escapeHTML(linha[colLocal]) : escapeHTML(linha[colImovelPrincipal] || linha['IMÓVEL'] || '-');
 
+                            let vValorFinal = (colValorPuro && linha[colValorPuro]) ? linha[colValorPuro] : (colValorArremateAntigo ? linha[colValorArremateAntigo] : null);
                             let valorArremateTexto = '-';
-                            if (colValorArremate && linha[colValorArremate]) {
-                                let numValor = window.parseDinheiro(linha[colValorArremate]);
+                            if (vValorFinal) {
+                                let numValor = window.parseDinheiro(vValorFinal);
                                 if (numValor > 0) {
                                     valorArremateTexto = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor));
                                     totalArrematado += numValor;
@@ -746,8 +806,9 @@
                             }
 
                             let dataTexto = '-';
-                            if (colData && linha[colData]) {
-                                let strDate = String(linha[colData]).trim();
+                            let vDataFinal = (colDataAdj && linha[colDataAdj]) ? linha[colDataAdj] : (colDataAntiga ? linha[colDataAntiga] : null);
+                            if (vDataFinal) {
+                                let strDate = String(vDataFinal).trim();
                                 if (strDate.includes('T')) {
                                     let partes = strDate.split('T')[0].split('-');
                                     if (partes.length === 3) dataTexto = `${partes[2]}/${partes[1]}/${partes[0]}`;
@@ -758,17 +819,13 @@
                                 }
                             }
 
-                            let formaPagamento = colunaPagamentoOriginal ? escapeHTML(linha[colunaPagamentoOriginal] || '-') : '-';
-
                             linhasHtmlArrematados += `
                                 <tr class="${trClasses}">
-                                    <td class="p-3 text-left font-bold text-navy truncate min-w-[250px] max-w-[350px]" title="${imovel}">${imovel}</td>
-                                    <td class="p-3 text-left text-gray-700 text-xs whitespace-normal min-w-[100px]">${matriculaTexto}</td>
-                                    <td class="p-3 text-center text-gray-700 text-xs min-w-[80px]">${loteTexto}</td>
-                                    <td class="p-3 text-left text-gray-700 text-xs truncate max-w-[200px]" title="${arrematanteTexto}">${arrematanteTexto}</td>
-                                    <td class="p-3 text-center text-gray-700 text-xs font-semibold">${valorArremateTexto}</td>
-                                    <td class="p-3 text-center text-gray-700 text-xs">${dataTexto}</td>
-                                    <td class="p-3 text-left text-gray-700 text-xs whitespace-normal min-w-[200px]">${formaPagamento}</td>
+                                    <td class="p-3 text-left font-bold text-navy whitespace-normal break-words">${arrematanteTexto}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs whitespace-normal break-words">${loteTexto}</td>
+                                    <td class="p-3 text-left text-gray-700 text-xs whitespace-normal break-words">${localTexto}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs font-semibold whitespace-normal">${valorArremateTexto}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs whitespace-normal">${dataTexto}</td>
                                 </tr>
                             `;
                         });
@@ -778,29 +835,32 @@
                             let totalFormatado = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalArrematado));
                             tfootHtmlArrematados = `
                                 <tr class="bg-green-50 border-t-2 border-green-200 shadow-inner">
-                                    <td colspan="4" class="p-4 text-right font-black text-green-800 uppercase tracking-widest border-r border-green-200">TOTAL ARREMATADO</td>
+                                    <td colspan="3" class="p-4 text-right font-black text-green-800 uppercase tracking-widest border-r border-green-200">TOTAL ARREMATADO</td>
                                     <td class="p-4 text-center font-black text-green-800 text-sm border-r border-green-200">${totalFormatado}</td>
-                                    <td colspan="2"></td>
+                                    <td></td>
                                 </tr>
                             `;
                         } else if (dadosArrematados.length === 0) {
-                            linhasHtmlArrematados = `<tr><td colspan="7" class="p-6 text-center text-gray-500 italic">Nenhum imóvel arrematado encontrado.</td></tr>`;
+                            // MENSAGEM DE DIAGNÓSTICO
+                            let colunasInfo = escapeHTML(todasColunas.join(', '));
+                            linhasHtmlArrematados = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">
+                                Nenhum lote arrematado encontrado.<br>
+                                <span class="text-[9px] text-red-400 mt-3 block"><strong>Diagnóstico (Colunas detetadas):</strong> ${colunasInfo}</span>
+                            </td></tr>`;
                         }
 
                         conteinerSecoes.innerHTML += `
                             <section id="${idSecaoArrematados}" class="section-content">
                                 <div class="card overflow-hidden shadow-md bg-white w-full">
-                                    <div class="w-full overflow-x-auto custom-scrollbar">
-                                        <table class="w-full text-left text-xs whitespace-nowrap border-collapse">
+                                    <div class="w-full">
+                                        <table class="w-full text-left text-xs border-collapse">
                                             <thead class="uppercase text-[11px] bg-gray-200 text-black shadow-sm">
                                                 <tr>
-                                                    <th class="p-3 text-left border-r border-gray-300 min-w-[250px]">Imóvel</th>
-                                                    <th class="p-3 text-left border-r border-gray-300 min-w-[100px]">Matrícula</th>
-                                                    <th class="p-3 text-center border-r border-gray-300 min-w-[80px]">Lote</th>
-                                                    <th class="p-3 text-left border-r border-gray-300 min-w-[150px]">Arrematante</th>
-                                                    <th class="p-3 text-center border-r border-gray-300 min-w-[150px]">Valor Arrematado</th>
-                                                    <th class="p-3 text-center border-r border-gray-300 min-w-[120px]">Data</th>
-                                                    <th class="p-3 text-left min-w-[200px]">Forma de Pagamento</th>
+                                                    <th class="p-3 text-left border-r border-gray-300 w-[25%]">Arrematante</th>
+                                                    <th class="p-3 text-center border-r border-gray-300 w-[10%]">Lote</th>
+                                                    <th class="p-3 text-left border-r border-gray-300 w-[25%]">Local</th>
+                                                    <th class="p-3 text-center border-r border-gray-300 w-[15%]">Valor</th>
+                                                    <th class="p-3 text-center w-[25%]">Data de Adjudicação e Homologação</th>
                                                 </tr>
                                             </thead>
                                             <tbody class="text-gray-800 font-medium">
@@ -820,226 +880,6 @@
                     if (usandoMock) {
                         document.getElementById('page-title').innerHTML += ' <span class="text-[10px] bg-red-500 text-white px-2 py-1 rounded ml-2 align-middle" title="Erro de rede/CORS. Exibindo dados de teste.">MODO DEMO</span>';
                     }
-
-                    const canvasSetorAtual = document.getElementById('chart-setor-atual');
-                    if (canvasSetorAtual && labelsSetorAtual.length > 0) {
-                        const gerarCoresSetor = (qtd) => {
-                            const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
-                            let cores = [];
-                            for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
-                            return cores;
-                        };
-
-                        new Chart(canvasSetorAtual.getContext('2d'), {
-                            type: 'pie',
-                            data: {
-                                labels: labelsSetorAtual,
-                                datasets: [{
-                                    label: 'Quantidade',
-                                    data: valuesSetorAtual,
-                                    backgroundColor: gerarCoresSetor(labelsSetorAtual.length),
-                                    borderWidth: 1,
-                                    borderColor: '#ffffff'
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: {
-                                    legend: {
-                                        display: labelsSetorAtual.length <= 20,
-                                        position: 'right',
-                                        labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
-                                    },
-                                    tooltip: {
-                                        backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
-                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
-                                        padding: 12, cornerRadius: 8, displayColors: true,
-                                        callbacks: {
-                                            label: function(context) {
-                                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                const porcentagem = ((context.raw / total) * 100).toFixed(1);
-                                                return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    }
-
-                    colunasMenu.forEach((coluna, index) => {
-                        const idSecao = 'secao-' + index;
-                        const isCoordenadasTab = coluna.toUpperCase().includes('COORDENADA');
-                        
-                        if (isCoordenadasTab) {
-                            const mapContainer = document.getElementById(`map-${idSecao}`);
-                            if (mapContainer) {
-                                window.appMaps = window.appMaps || {};
-                                
-                                const map = L.map(mapContainer).setView([-20.7383, -48.9133], 13);
-                                const mapaRuas = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                                    maxZoom: 19,
-                                    attribution: '© OpenStreetMap contributors © CARTO'
-                                });
-                                const mapaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                                    maxZoom: 19,
-                                    attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-                                });
-
-                                mapaRuas.addTo(map);
-                                L.control.layers({
-                                    "Mapa de Ruas": mapaRuas,
-                                    "Visão por Satélite": mapaSatelite
-                                }).addTo(map);
-
-                                let bounds = L.latLngBounds();
-                                let hasValidMarkers = false;
-
-                                window.appMarkers = window.appMarkers || {};
-
-                                dados.forEach(d => {
-                                    let coordStr = String(d[coluna] || '').trim();
-                                    let nomeImovel = escapeHTML(d['IMÓVEL'] || 'Imóvel Sem Nome');
-                                    let coords = window.parseCoordinates(coordStr);
-
-                                    if (coords && coords.length === 2) {
-                                        let lat = coords[0];
-                                        let lng = coords[1];
-                                        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                                            let marker = L.marker([lat, lng]).addTo(map)
-                                                .bindPopup(`<div class="font-bold text-[12px] uppercase text-navy">${nomeImovel}</div>`)
-                                                .bindTooltip(`<div class="font-bold text-[10px] uppercase text-navy">${nomeImovel}</div>`, {
-                                                    direction: 'top', 
-                                                    offset: [0, -35],
-                                                    opacity: 0.95
-                                                });
-                                            window.appMarkers[`${idSecao}_${lat}_${lng}`] = marker;
-                                            bounds.extend([lat, lng]);
-                                            hasValidMarkers = true;
-                                        }
-                                    }
-                                });
-
-                                if (hasValidMarkers) {
-                                    setTimeout(() => { map.fitBounds(bounds, { padding: [40, 40] }); }, 500);
-                                }
-                                window.appMaps[idSecao] = map;
-                            }
-                        } 
-                        else {
-                            const canvas = document.getElementById(`chart-${idSecao}`);
-                            if(canvas) {
-                                const isPizza = ['ÁREA', 'ESTIMATIVA', 'VALOR', 'R$', 'AVALIAÇÃO', 'AVALIACAO', 'ALIENAÇÃO', 'PERMUTA', 'DESAPROPRIAÇÃO'].some(c => coluna.toUpperCase().includes(c));
-                                const isEstimativaTab = coluna.toUpperCase().includes('ESTIMATIVA') || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$') || coluna.toUpperCase().includes('AVALIAÇÃO') || coluna.toUpperCase().includes('AVALIACAO');
-                                
-                                let labels = [];
-                                let values = [];
-
-                                if (isEstimativaTab) {
-                                    let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
-                                    
-                                    dados.forEach(d => {
-                                        let num = window.parseDinheiro(d[coluna]);
-                                        let isBlank = true, hasX = false, lastIsV = false;
-                                        for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
-                                            let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
-                                            if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
-                                                if (isBlank) {
-                                                    if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
-                                                }
-                                                isBlank = false;
-                                                if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado') || valCell.startsWith('x ') || /^x[-]?\d/.test(valCell)) hasX = true;
-                                            }
-                                        }
-                                        if (isBlank) valPen += num;
-                                        else if (lastIsV) valCon += num;
-                                        else if (hasX) valAnd += num;
-                                        else valIniStrict += num;
-                                    });
-
-                                    if (valPen > 0) { labels.push('Pendente'); values.push(valPen); }
-                                    if (valIniStrict > 0) { labels.push('Apenas Iniciado'); values.push(valIniStrict); }
-                                    if (valAnd > 0) { labels.push('Em Andamento'); values.push(valAnd); }
-                                    if (valCon > 0) { labels.push('Concluído'); values.push(valCon); }
-                                } else {
-                                    const contagem = {};
-                                    dados.forEach(d => {
-                                        let v = escapeHTML(String(d[coluna] || 'Não Informado').trim());
-                                        if(v.length > 35) v = v.substring(0, 35) + '...';
-                                        contagem[v] = (contagem[v] || 0) + 1;
-                                    });
-                                    labels = Object.keys(contagem);
-                                    values = Object.values(contagem);
-                                }
-                                
-                                if (!isPizza && labels.length > 15 && labels.length >= dados.length * 0.8) {
-                                    document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
-                                        <div class="flex items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
-                                            <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i>
-                                            Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.
-                                        </div>
-                                    `;
-                                    return;
-                                }
-
-                                const gerarCores = (qtd) => {
-                                    const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
-                                    let cores = [];
-                                    for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
-                                    return cores;
-                                };
-
-                                let tipoGrafico = labels.length > 7 ? 'bar' : 'doughnut';
-                                if (isPizza) tipoGrafico = 'pie';
-                                
-                                new Chart(canvas.getContext('2d'), {
-                                    type: tipoGrafico,
-                                    data: {
-                                        labels: labels,
-                                        datasets: [{
-                                            label: 'Quantidade',
-                                            data: values,
-                                            backgroundColor: gerarCores(labels.length),
-                                            borderWidth: (tipoGrafico === 'bar' && labels.length > 7) ? 0 : 1,
-                                            borderColor: '#ffffff'
-                                        }]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: {
-                                                display: labels.length <= 20,
-                                                position: 'right',
-                                                labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
-                                            },
-                                            tooltip: {
-                                                backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                                titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
-                                                bodyFont: { family: "'Poppins', sans-serif", size: 12 },
-                                                padding: 12, cornerRadius: 8, displayColors: true,
-                                                callbacks: {
-                                                    title: function(tooltipItems) { return tooltipItems[0].label; },
-                                                    label: function(context) {
-                                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                        const porcentagem = ((context.raw / total) * 100).toFixed(1);
-                                                        if (isEstimativaTab) {
-                                                            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
-                                                            return [`Valor Total: ${fmt}`, `Representa: ${porcentagem}%`];
-                                                        }
-                                                        return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        scales: tipoGrafico === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { display: false } } : undefined
-                                    }
-                                });
-                            }
-                        }
-                    });
 
                 }
             } catch (erro) {
