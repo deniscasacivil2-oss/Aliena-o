@@ -785,7 +785,6 @@
                             return temV || temValorAntigo || temArrematante || temLote || temLocal || temValorPuro;
                         });
 
-                        let totalArrematado = 0;
                         let linhasHtmlArrematados = '';
 
                         dadosArrematados.forEach((linha, i) => {
@@ -801,7 +800,6 @@
                                 let numValor = window.parseDinheiro(vValorFinal);
                                 if (numValor > 0) {
                                     valorArremateTexto = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor));
-                                    totalArrematado += numValor;
                                 }
                             }
 
@@ -809,13 +807,18 @@
                             let vDataFinal = (colDataAdj && linha[colDataAdj]) ? linha[colDataAdj] : (colDataAntiga ? linha[colDataAntiga] : null);
                             if (vDataFinal) {
                                 let strDate = String(vDataFinal).trim();
-                                if (strDate.includes('T')) {
+                                if (strDate.includes('T') && strDate.match(/^\d{4}-\d{2}-\d{2}T/)) {
                                     let partes = strDate.split('T')[0].split('-');
                                     if (partes.length === 3) dataTexto = `${partes[2]}/${partes[1]}/${partes[0]}`;
-                                } else if (strDate.includes(' ')) {
-                                    dataTexto = escapeHTML(strDate.split(' ')[0]);
                                 } else {
-                                    dataTexto = escapeHTML(strDate);
+                                    let primeiraParte = strDate.split(' ')[0];
+                                    // Se a primeira parte parecer uma data (tem barras ou formato YYYY-MM-DD), usamos apenas ela (para cortar as horas)
+                                    if (primeiraParte.includes('/') || primeiraParte.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                        dataTexto = escapeHTML(primeiraParte);
+                                    } else {
+                                        // Caso contrário (ex: "10 de junho de 2026"), mostra a data completa sem cortar
+                                        dataTexto = escapeHTML(strDate);
+                                    }
                                 }
                             }
 
@@ -830,17 +833,7 @@
                             `;
                         });
 
-                        let tfootHtmlArrematados = '';
-                        if (totalArrematado > 0) {
-                            let totalFormatado = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalArrematado));
-                            tfootHtmlArrematados = `
-                                <tr class="bg-green-50 border-t-2 border-green-200 shadow-inner">
-                                    <td colspan="3" class="p-4 text-right font-black text-green-800 uppercase tracking-widest border-r border-green-200">TOTAL ARREMATADO</td>
-                                    <td class="p-4 text-center font-black text-green-800 text-sm border-r border-green-200">${totalFormatado}</td>
-                                    <td></td>
-                                </tr>
-                            `;
-                        } else if (dadosArrematados.length === 0) {
+                        if (dadosArrematados.length === 0) {
                             // MENSAGEM DE DIAGNÓSTICO
                             let colunasInfo = escapeHTML(todasColunas.join(', '));
                             linhasHtmlArrematados = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">
@@ -865,7 +858,6 @@
                                             </thead>
                                             <tbody class="text-gray-800 font-medium">
                                                 ${linhasHtmlArrematados}
-                                                ${tfootHtmlArrematados}
                                             </tbody>
                                         </table>
                                     </div>
