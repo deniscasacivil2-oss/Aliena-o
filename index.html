@@ -812,11 +812,9 @@
                                     if (partes.length === 3) dataTexto = `${partes[2]}/${partes[1]}/${partes[0]}`;
                                 } else {
                                     let primeiraParte = strDate.split(' ')[0];
-                                    // Se a primeira parte parecer uma data (tem barras ou formato YYYY-MM-DD), usamos apenas ela (para cortar as horas)
                                     if (primeiraParte.includes('/') || primeiraParte.match(/^\d{4}-\d{2}-\d{2}$/)) {
                                         dataTexto = escapeHTML(primeiraParte);
                                     } else {
-                                        // Caso contrário (ex: "10 de junho de 2026"), mostra a data completa sem cortar
                                         dataTexto = escapeHTML(strDate);
                                     }
                                 }
@@ -834,7 +832,6 @@
                         });
 
                         if (dadosArrematados.length === 0) {
-                            // MENSAGEM DE DIAGNÓSTICO
                             let colunasInfo = escapeHTML(todasColunas.join(', '));
                             linhasHtmlArrematados = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">
                                 Nenhum lote arrematado encontrado.<br>
@@ -872,6 +869,240 @@
                     if (usandoMock) {
                         document.getElementById('page-title').innerHTML += ' <span class="text-[10px] bg-red-500 text-white px-2 py-1 rounded ml-2 align-middle" title="Erro de rede/CORS. Exibindo dados de teste.">MODO DEMO</span>';
                     }
+
+                    // --- RESTAURO DO BLOCO DE INICIALIZAÇÃO DE GRÁFICOS E MAPAS --- //
+                    
+                    // 1. Gráfico da secção "Setor Atual"
+                    const canvasSetorAtual = document.getElementById('chart-setor-atual');
+                    if (canvasSetorAtual && labelsSetorAtual.length > 0) {
+                        const gerarCoresSetor = (qtd) => {
+                            const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
+                            let cores = [];
+                            for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
+                            return cores;
+                        };
+
+                        new Chart(canvasSetorAtual.getContext('2d'), {
+                            type: 'pie',
+                            data: {
+                                labels: labelsSetorAtual,
+                                datasets: [{
+                                    label: 'Quantidade',
+                                    data: valuesSetorAtual,
+                                    backgroundColor: gerarCoresSetor(labelsSetorAtual.length),
+                                    borderWidth: 1,
+                                    borderColor: '#ffffff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        display: labelsSetorAtual.length <= 20,
+                                        position: 'right',
+                                        labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
+                                    },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
+                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
+                                        padding: 12, cornerRadius: 8, displayColors: true,
+                                        callbacks: {
+                                            label: function(context) {
+                                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // 2. Gráficos e Mapas dinâmicos para o restante do Menu
+                    colunasMenu.forEach((coluna, index) => {
+                        const idSecao = 'secao-' + index;
+                        const cNorm = normalizeStr(coluna);
+                        const isCoordenadasTab = cNorm.includes('COORDENADA');
+
+                        if (isCoordenadasTab) {
+                            const mapContainer = document.getElementById(`map-${idSecao}`);
+                            if (mapContainer) {
+                                window.appMaps = window.appMaps || {};
+                                
+                                const map = L.map(mapContainer).setView([-20.7383, -48.9133], 13);
+                                const mapaRuas = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                                    maxZoom: 19,
+                                    attribution: '© OpenStreetMap contributors © CARTO'
+                                });
+                                const mapaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                                    maxZoom: 19,
+                                    attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                                });
+
+                                mapaRuas.addTo(map);
+                                L.control.layers({
+                                    "Mapa de Ruas": mapaRuas,
+                                    "Visão por Satélite": mapaSatelite
+                                }).addTo(map);
+
+                                let bounds = L.latLngBounds();
+                                let hasValidMarkers = false;
+
+                                window.appMarkers = window.appMarkers || {};
+
+                                dados.forEach(d => {
+                                    let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
+                                    // Ignorar linhas em branco (da aba dos arrematados) no mapa principal
+                                    if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
+
+                                    let coordStr = String(d[coluna] || '').trim();
+                                    let coords = window.parseCoordinates(coordStr);
+
+                                    if (coords && coords.length === 2) {
+                                        let lat = coords[0];
+                                        let lng = coords[1];
+                                        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                                            let marker = L.marker([lat, lng]).addTo(map)
+                                                .bindPopup(`<div class="font-bold text-[12px] uppercase text-navy">${imovelLimpo}</div>`)
+                                                .bindTooltip(`<div class="font-bold text-[10px] uppercase text-navy">${imovelLimpo}</div>`, {
+                                                    direction: 'top', 
+                                                    offset: [0, -35],
+                                                    opacity: 0.95
+                                                });
+                                            window.appMarkers[`${idSecao}_${lat}_${lng}`] = marker;
+                                            bounds.extend([lat, lng]);
+                                            hasValidMarkers = true;
+                                        }
+                                    }
+                                });
+
+                                if (hasValidMarkers) {
+                                    setTimeout(() => { map.fitBounds(bounds, { padding: [40, 40] }); }, 500);
+                                }
+                                window.appMaps[idSecao] = map;
+                            }
+                        } 
+                        else {
+                            const canvas = document.getElementById(`chart-${idSecao}`);
+                            if(canvas) {
+                                const isPizza = ['AREA', 'ESTIMATIVA', 'VALOR', 'R$', 'AVALIACAO', 'ALIENACAO', 'PERMUTA', 'DESAPROPRIACAO'].some(c => cNorm.includes(c));
+                                const isEstimativaTab = cNorm.includes('ESTIMATIVA') || cNorm.includes('VALOR') || cNorm.includes('R$') || cNorm.includes('AVALIACAO');
+                                
+                                let labels = [];
+                                let values = [];
+
+                                if (isEstimativaTab) {
+                                    let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
+                                    
+                                    dados.forEach(d => {
+                                        let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
+                                        if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
+
+                                        let num = window.parseDinheiro(d[coluna]);
+                                        let isBlank = true, hasX = false, lastIsV = false;
+                                        for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
+                                            let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
+                                            if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
+                                                if (isBlank) {
+                                                    if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
+                                                }
+                                                isBlank = false;
+                                                if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado') || valCell.startsWith('x ') || /^x[-]?\d/.test(valCell)) hasX = true;
+                                            }
+                                        }
+                                        if (isBlank) valPen += num;
+                                        else if (lastIsV) valCon += num;
+                                        else if (hasX) valAnd += num;
+                                        else valIniStrict += num;
+                                    });
+
+                                    if (valPen > 0) { labels.push('Pendente'); values.push(valPen); }
+                                    if (valIniStrict > 0) { labels.push('Apenas Iniciado'); values.push(valIniStrict); }
+                                    if (valAnd > 0) { labels.push('Em Andamento'); values.push(valAnd); }
+                                    if (valCon > 0) { labels.push('Concluído'); values.push(valCon); }
+                                } else {
+                                    const contagem = {};
+                                    dados.forEach(d => {
+                                        let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
+                                        if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
+
+                                        let v = escapeHTML(String(d[coluna] || 'Não Informado').trim());
+                                        if(v.length > 35) v = v.substring(0, 35) + '...';
+                                        contagem[v] = (contagem[v] || 0) + 1;
+                                    });
+                                    labels = Object.keys(contagem);
+                                    values = Object.values(contagem);
+                                }
+                                
+                                if (!isPizza && labels.length > 15 && labels.length >= (dados.length * 0.5)) {
+                                    document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
+                                        <div class="flex items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
+                                            <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i>
+                                            Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.
+                                        </div>
+                                    `;
+                                    return;
+                                }
+
+                                const gerarCores = (qtd) => {
+                                    const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
+                                    let cores = [];
+                                    for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
+                                    return cores;
+                                };
+
+                                let tipoGrafico = labels.length > 7 ? 'bar' : 'doughnut';
+                                if (isPizza) tipoGrafico = 'pie';
+                                
+                                new Chart(canvas.getContext('2d'), {
+                                    type: tipoGrafico,
+                                    data: {
+                                        labels: labels,
+                                        datasets: [{
+                                            label: 'Quantidade',
+                                            data: values,
+                                            backgroundColor: gerarCores(labels.length),
+                                            borderWidth: (tipoGrafico === 'bar' && labels.length > 7) ? 0 : 1,
+                                            borderColor: '#ffffff'
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {
+                                            legend: {
+                                                display: labels.length <= 20,
+                                                position: 'right',
+                                                labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
+                                            },
+                                            tooltip: {
+                                                backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                                titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
+                                                bodyFont: { family: "'Poppins', sans-serif", size: 12 },
+                                                padding: 12, cornerRadius: 8, displayColors: true,
+                                                callbacks: {
+                                                    title: function(tooltipItems) { return tooltipItems[0].label; },
+                                                    label: function(context) {
+                                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                        const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                        if (isEstimativaTab) {
+                                                            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
+                                                            return [`Valor Total: ${fmt}`, `Representa: ${porcentagem}%`];
+                                                        }
+                                                        return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        scales: tipoGrafico === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { display: false } } : undefined
+                                    }
+                                });
+                            }
+                        }
+                    });
 
                 }
             } catch (erro) {
