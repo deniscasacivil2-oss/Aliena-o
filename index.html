@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
@@ -19,6 +19,9 @@
         .nav-link { transition: all 0.2s; border-radius: 8px; }
         .nav-link.active { background-color: #ffb800; color: #003366 !important; font-weight: 600; }
         .text-navy { color: #003366; }
+        .bg-navy { background-color: #003366; }
+        .text-gold { color: #ffb800; }
+        .border-gold { border-color: #ffb800; }
         .text-gray-contrast { color: #475569; }
         .section-content { display: none; }
         .section-content.active { display: block; animation: fadeIn 0.4s ease-out; }
@@ -38,6 +41,7 @@
 </head>
 <body class="flex min-h-screen">
 
+    <!-- Sidebar Lateral -->
     <aside id="sidebar" class="sidebar text-white flex-shrink-0 flex flex-col transition-all duration-300 w-64 overflow-hidden h-screen sticky top-0 z-50">
         <div class="sidebar-content flex flex-col h-full">
             <div class="p-6 text-center border-b border-blue-900">
@@ -61,10 +65,11 @@
         </div>
     </aside>
 
+    <!-- Conteúdo Principal -->
     <main class="flex-grow flex flex-col min-w-0 w-full">
         <header class="bg-white border-b h-16 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm">
             <div class="flex items-center space-x-4">
-                <button onclick="toggleSidebar()" class="text-navy hover:text-blue-600 transition-colors focus:outline-none">
+                <button onclick="toggleSidebar()" class="text-navy hover:text-blue-600 transition-colors focus:outline-none" aria-label="Alternar Menu">
                     <i class="fa-solid fa-bars text-xl"></i>
                 </button>
                 <h1 id="page-title" class="text-xl font-bold text-navy uppercase tracking-tight">Carregando...</h1>
@@ -115,10 +120,11 @@
 
         window.showSection = function(sectionId, element, titulo) {
             document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-            element.classList.add('active');
+            if (element) element.classList.add('active');
 
             document.querySelectorAll('.section-content').forEach(section => section.classList.remove('active'));
-            document.getElementById(sectionId).classList.add('active');
+            const sec = document.getElementById(sectionId);
+            if (sec) sec.classList.add('active');
 
             document.getElementById('page-title').innerText = titulo;
             
@@ -183,7 +189,7 @@
                     const mockData = [
                         { "ORDEM": "1", "IMÓVEL": "Terreno Central", "MATRÍCULA": "12345", "ÁREA": "500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 150.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "v", "JURÍDIC": "v", "COORDENADA": "-20.7383, -48.9133", "ARREMATADOS": "v", "VALOR ARREMATADO": "R$ 160.000,00", "DATA": "15/05/2026", "PAGAMENTO": "À vista", "CADASTRO MUNICIPAL": "11.22.33", "LOTE": "01", "ARREMATANTE": "João Silva" },
                         { "ORDEM": "2", "IMÓVEL": "Prédio Antigo", "MATRÍCULA": "67890", "ÁREA": "1200 m²", "STATUS": "Pendente", "ESTIMATIVA": "R$ 850.000,00", "CASA CIVIL": "v", "OBRA": "x aguardando laudo", "LICITA": "-", "JURÍDIC": "-", "COORDENADA": "-20.7400, -48.9100", "ARREMATADOS": "-", "VALOR ARREMATADO": "-", "DATA": "-", "PAGAMENTO": "-", "CADASTRO MUNICIPAL": "44.55.66" },
-                        { "ORDEM": "3", "IMÓVEL": "Loteamento Novo com descrição bem grande para testar a quebra de linha", "MATRÍCULA": "54321", "ÁREA": "300 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 100.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "andamento", "JURÍDIC": "-", "COORDENADA": "-20.7350, -48.9200", "ARREMATADOS": "v", "VALOR ARREMATADO": "120000", "DATA": "10/06/2026", "PAGAMENTO": "Parcelado em 12x", "CADASTRO MUNICIPAL": "77.88.99", "LOTE": "05", "ARREMATANTE": "Empresa XYZ Participações S.A." },
+                        { "ORDEM": "3", "IMÓVEL": "Loteamento Novo de Expansão Urbana", "MATRÍCULA": "54321", "ÁREA": "300 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 100.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "andamento", "JURÍDIC": "-", "COORDENADA": "-20.7350, -48.9200", "ARREMATADOS": "v", "VALOR ARREMATADO": "120000", "DATA": "10/06/2026", "PAGAMENTO": "Parcelado em 12x", "CADASTRO MUNICIPAL": "77.88.99", "LOTE": "05", "ARREMATANTE": "Empresa XYZ Participações S.A." },
                         { "ORDEM": "TOTAL", "IMÓVEL": "TOTAL", "ESTIMATIVA": "R$ 1.100.000,00", "VALOR ARREMATADO": "R$ 280.000,00" }
                     ];
                     textoResposta = JSON.stringify(mockData);
@@ -193,7 +199,7 @@
                 try {
                     dadosBrutos = JSON.parse(textoResposta);
                 } catch (parseErro) {
-                    throw new Error("Invalid Format");
+                    throw new Error("Formato JSON Inválido");
                 }
                 
                 let dadosCompletos = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
@@ -230,7 +236,7 @@
                     dados.forEach(linha => Object.keys(linha).forEach(chave => colunasSet.add(chave)));
                     const todasColunas = Array.from(colunasSet);
 
-                    // Pega o nome original da coluna baseado numa string normalizada (à prova de bala)
+                    // Pega o nome original da coluna baseado numa string normalizada
                     const getCol = (nomesArray) => {
                         return todasColunas.find(c => {
                             let cleanC = normalizeStr(c);
@@ -265,7 +271,7 @@
                     });
                     const colunaCadastro = getCol(['CADASTRO MUNICIPAL']);
 
-                    // Buscadores robustos para a aba Lotes Arrematados
+                    // Buscadores para a aba Lotes Arrematados
                     const colArrematados = getCol(['ARREMATADOS', 'ARREMATADO']);
                     const colLote = todasColunas.find(c => normalizeStr(c) === 'LOTE');
                     const colArrematante = getCol(['ARREMATANTE']);
@@ -308,11 +314,10 @@
                         let linhasKanban = '';
                         let kanbanRowIdx = 0;
                         
-                        dados.forEach((linha, idx) => {
+                        dados.forEach((linha) => {
                             let imovelVal = linha[colImovelPrincipal] || linha['IMÓVEL'] || linha['IMOVEL'];
                             let imovelLimpo = escapeHTML(imovelVal || '-');
                             
-                            // Se a linha não tem a coluna Imóvel (veio da aba Lotes Arrematados), ignorar no Kanban
                             if (!imovelVal || String(imovelVal).trim() === '' || imovelLimpo === '-') return;
 
                             let isEven = kanbanRowIdx % 2 === 0;
@@ -481,11 +486,10 @@
                         let countConcluido = 0, valConcluido = 0;
                         let tabelaRowIdx = 0;
 
-                        dados.forEach((linha, i) => {
+                        dados.forEach((linha) => {
                             let imovelVal = linha[colImovelPrincipal] || linha['IMÓVEL'] || linha['IMOVEL'];
                             let imovelLimpo = escapeHTML(imovelVal || '-');
                             
-                            // Se a linha não tem a coluna Imóvel (veio da aba Lotes Arrematados), ignorar nas abas genéricas
                             if (!imovelVal || String(imovelVal).trim() === '' || imovelLimpo === '-') return;
 
                             let rawValorColuna = linha[coluna] || '-';
@@ -531,10 +535,49 @@
                             }
 
                             if(isStatusTab) {
-                                let statusTexto = escapeHTML(linha[coluna] || '-');
+                                let rawStatus = String(linha[coluna] || '-').trim();
+                                let customColorClass = null;
+                                
+                                // Procura por uma cor definida entre <> (ex: <VERMELHO>, <VERDE>)
+                                let match = rawStatus.match(/<([^>]+)>/);
+                                
+                                if (match) {
+                                    let colorName = match[1].trim().toLowerCase();
+                                    
+                                    // Remove a tag de cor do texto original
+                                    rawStatus = rawStatus.replace(match[0], '').trim();
+                                    if (rawStatus === '') rawStatus = '-';
+                                    
+                                    // Mapeia as cores em português para as classes do Tailwind
+                                    const colorMap = {
+                                        'verde': 'text-green-700 bg-green-100',
+                                        'vermelho': 'text-red-700 bg-red-100',
+                                        'amarelo': 'text-yellow-700 bg-yellow-100',
+                                        'azul': 'text-blue-700 bg-blue-100',
+                                        'laranja': 'text-orange-700 bg-orange-100',
+                                        'roxo': 'text-purple-700 bg-purple-100',
+                                        'rosa': 'text-pink-700 bg-pink-100',
+                                        'cinza': 'text-gray-700 bg-gray-100',
+                                        'marrom': 'text-amber-800 bg-amber-100',
+                                        'preto': 'text-white bg-gray-800',
+                                        'branco': 'text-gray-800 bg-white border border-gray-300'
+                                    };
+                                    
+                                    customColorClass = colorMap[colorName] || 'text-gray-800 bg-gray-200';
+                                }
+
+                                let statusTexto = escapeHTML(rawStatus);
                                 let corStatus = 'text-gray-600';
-                                if(statusTexto.toLowerCase().includes('regular') || statusTexto.toLowerCase().includes('ativo')) corStatus = 'text-green-600 bg-green-100 px-2 py-1 rounded';
-                                else if(statusTexto.toLowerCase().includes('pendente') || statusTexto.toLowerCase().includes('irregular')) corStatus = 'text-orange-600 bg-orange-100 px-2 py-1 rounded';
+                                
+                                if (customColorClass) {
+                                    // Se existir cor customizada, aplica ela
+                                    corStatus = customColorClass + ' px-2 py-1 rounded';
+                                } else {
+                                    // Comportamento original
+                                    if(statusTexto.toLowerCase().includes('regular') || statusTexto.toLowerCase().includes('ativo')) corStatus = 'text-green-600 bg-green-100 px-2 py-1 rounded';
+                                    else if(statusTexto.toLowerCase().includes('pendente') || statusTexto.toLowerCase().includes('irregular')) corStatus = 'text-orange-600 bg-orange-100 px-2 py-1 rounded';
+                                }
+                                
                                 valorColuna = `<span class="font-bold text-[10px] uppercase tracking-wider whitespace-normal inline-block ${corStatus}">${statusTexto}</span>`;
                             }
                             
@@ -835,7 +878,7 @@
                             let colunasInfo = escapeHTML(todasColunas.join(', '));
                             linhasHtmlArrematados = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">
                                 Nenhum lote arrematado encontrado.<br>
-                                <span class="text-[9px] text-red-400 mt-3 block"><strong>Diagnóstico (Colunas detetadas):</strong> ${colunasInfo}</span>
+                                <span class="text-[9px] text-red-400 mt-3 block"><strong>Diagnóstico (Colunas detectadas):</strong> ${colunasInfo}</span>
                             </td></tr>`;
                         }
 
@@ -870,9 +913,9 @@
                         document.getElementById('page-title').innerHTML += ' <span class="text-[10px] bg-red-500 text-white px-2 py-1 rounded ml-2 align-middle" title="Erro de rede/CORS. Exibindo dados de teste.">MODO DEMO</span>';
                     }
 
-                    // --- RESTAURO DO BLOCO DE INICIALIZAÇÃO DE GRÁFICOS E MAPAS --- //
+                    // --- INICIALIZAÇÃO DE GRÁFICOS E MAPAS ---
                     
-                    // 1. Gráfico da secção "Setor Atual"
+                    // 1. Gráfico da seção "Setor Atual"
                     const canvasSetorAtual = document.getElementById('chart-setor-atual');
                     if (canvasSetorAtual && labelsSetorAtual.length > 0) {
                         const gerarCoresSetor = (qtd) => {
@@ -939,7 +982,7 @@
                                 });
                                 const mapaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                                     maxZoom: 19,
-                                    attribution: '&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                                    attribution: '&copy; Esri'
                                 });
 
                                 mapaRuas.addTo(map);
@@ -955,7 +998,6 @@
 
                                 dados.forEach(d => {
                                     let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
-                                    // Ignorar linhas em branco (da aba dos arrematados) no mapa principal
                                     if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
 
                                     let coordStr = String(d[coluna] || '').trim();
