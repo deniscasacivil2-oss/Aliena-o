@@ -288,6 +288,119 @@
                         colunasReaisSetores.push(colArrematados);
                     }
 
+                    // --- NOVA ABA: VISÃO GERAL DOS RESULTADOS ---
+                    const idSecaoVisaoGeral = 'secao-visao-geral';
+                    let sum2025 = 0, count2025 = 0;
+                    let sum2026 = 0, count2026 = 0;
+                    let sumTotal = 0, countTotal = 0;
+                    let sumEstimativa = 0, countEstimativa = 0;
+
+                    // Busca a coluna de estimativa para os próximos leilões
+                    const colEstimativaGeral = todasColunas.find(c => {
+                        let n = normalizeStr(c);
+                        return n.includes('ESTIMATIVA') || n.includes('AVALIACAO');
+                    });
+                    
+                    dados.forEach(linha => {
+                        let vStatus = colArrematados ? String(linha[colArrematados] || '').trim().toLowerCase() : '';
+                        let temLote = colLote && linha[colLote] && String(linha[colLote]).trim() !== '-' && String(linha[colLote]).trim() !== '';
+                        let temArrematante = colArrematante && linha[colArrematante] && String(linha[colArrematante]).trim() !== '-' && String(linha[colArrematante]).trim() !== '';
+                        let temLocal = colLocal && linha[colLocal] && String(linha[colLocal]).trim() !== '-' && String(linha[colLocal]).trim() !== '';
+                        let temValorPuro = colValorPuro && linha[colValorPuro] && String(linha[colValorPuro]).trim() !== '-' && String(linha[colValorPuro]).trim() !== '';
+
+                        let temV = vStatus === 'v' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus) || vStatus === 'sim';
+                        
+                        let vValorAntigo = colValorArremateAntigo ? String(linha[colValorArremateAntigo] || '').trim() : '';
+                        let temValorAntigo = false;
+                        if (vValorAntigo !== '' && vValorAntigo !== '-') {
+                            if (window.parseDinheiro(vValorAntigo) > 0) temValorAntigo = true;
+                        }
+
+                        let isArrematadoValido = false;
+
+                        // Validação para os Lotes Arrematados
+                        if (temV || temValorAntigo || temArrematante || temLote || temLocal || temValorPuro) {
+                            let vValorFinal = (colValorPuro && linha[colValorPuro]) ? linha[colValorPuro] : (colValorArremateAntigo ? linha[colValorArremateAntigo] : null);
+                            let numValor = window.parseDinheiro(vValorFinal);
+                            
+                            let vDataFinal = (colDataAdj && linha[colDataAdj]) ? linha[colDataAdj] : (colDataAntiga ? linha[colDataAntiga] : null);
+                            let strDate = String(vDataFinal || '').trim();
+                            
+                            if (numValor > 0) {
+                                isArrematadoValido = true;
+                                sumTotal += numValor;
+                                countTotal++;
+                                if (strDate.includes('2025')) { sum2025 += numValor; count2025++; }
+                                if (strDate.includes('2026')) { sum2026 += numValor; count2026++; }
+                            }
+                        }
+
+                        // Estimativa para próximos leilões (apenas os NÃO arrematados que possuem estimativa)
+                        if (!isArrematadoValido && colEstimativaGeral) {
+                            let valEst = window.parseDinheiro(linha[colEstimativaGeral]);
+                            if (valEst > 0) {
+                                sumEstimativa += valEst;
+                                countEstimativa++;
+                            }
+                        }
+                    });
+
+                    const fmtCur = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+                    
+                    menuLateral.innerHTML += `
+                        <a href="#" onclick="showSection('${idSecaoVisaoGeral}', this, 'Visão Geral dos Resultados')" class="nav-link flex items-center space-x-3 p-3 text-gold hover:bg-blue-800 mb-1">
+                            <i class="fa-solid fa-chart-line w-6 text-center"></i>
+                            <span class="truncate text-[11px] font-bold tracking-wider uppercase">Visão Geral dos Resultados</span>
+                        </a>
+                    `;
+
+                    conteinerSecoes.innerHTML += `
+                        <section id="${idSecaoVisaoGeral}" class="section-content">
+                            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8 mt-2">
+                                <div class="card p-5 border-l-4 border-gray-400 shadow-sm flex flex-col justify-center">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Imóveis 2025</p>
+                                    <h3 class="text-xl lg:text-2xl font-black text-navy mt-1">${fmtCur.format(sum2025)}</h3>
+                                    <p class="text-[11px] font-bold text-gray-400 mt-1"><i class="fa-solid fa-layer-group mr-1"></i> ${count2025} lote(s)</p>
+                                </div>
+                                <div class="card p-5 border-l-4 border-blue-500 shadow-sm flex flex-col justify-center">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Imóveis 2026</p>
+                                    <h3 class="text-xl lg:text-2xl font-black text-navy mt-1">${fmtCur.format(sum2026)}</h3>
+                                    <p class="text-[11px] font-bold text-gray-400 mt-1"><i class="fa-solid fa-layer-group mr-1"></i> ${count2026} lote(s)</p>
+                                </div>
+                                <div class="card p-5 border-l-4 border-indigo-500 shadow-sm flex flex-col justify-center bg-indigo-50/30">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate" title="Total 2025 e 2026">Total 2025 e 2026</p>
+                                    <h3 class="text-xl lg:text-2xl font-black text-navy mt-1">${fmtCur.format(sum2025 + sum2026)}</h3>
+                                    <p class="text-[11px] font-bold text-indigo-400 mt-1"><i class="fa-solid fa-calendar-check mr-1"></i> ${count2025 + count2026} lote(s)</p>
+                                </div>
+                                <div class="card p-5 border-l-4 border-green-500 shadow-sm flex flex-col justify-center bg-green-50/30">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Próximos Leilões</p>
+                                    <h3 class="text-xl lg:text-2xl font-black text-green-700 mt-1">${fmtCur.format(sumEstimativa)}</h3>
+                                    <p class="text-[11px] font-bold text-gray-500 mt-1"><i class="fa-solid fa-chart-pie mr-1"></i> Est. ${countEstimativa} lote(s)</p>
+                                </div>
+                                <div class="card p-5 border-l-4 border-gold shadow-sm flex flex-col justify-center bg-blue-50/50">
+                                    <p class="text-[10px] font-bold text-navy uppercase tracking-wider">Total Arrematado</p>
+                                    <h3 class="text-xl lg:text-2xl font-black text-navy mt-1">${fmtCur.format(sumTotal)}</h3>
+                                    <p class="text-[11px] font-bold text-gray-500 mt-1"><i class="fa-solid fa-check-double mr-1"></i> ${countTotal} lote(s) concluído(s)</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+                                <div class="card p-6 flex flex-col items-center justify-center shadow-sm">
+                                    <h4 class="font-black text-navy text-sm mb-4 uppercase tracking-widest border-b-2 border-gray-100 pb-2 w-full text-center">Evolução Financeira</h4>
+                                    <div class="h-64 w-full relative">
+                                        <canvas id="chart-visao-valores"></canvas>
+                                    </div>
+                                </div>
+                                <div class="card p-6 flex flex-col items-center justify-center shadow-sm">
+                                    <h4 class="font-black text-navy text-sm mb-4 uppercase tracking-widest border-b-2 border-gray-100 pb-2 w-full text-center">Distribuição de Lotes</h4>
+                                    <div class="h-64 w-full relative">
+                                        <canvas id="chart-visao-lotes"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    `;
+
                     let labelsSetorAtual = [];
                     let valuesSetorAtual = [];
 
@@ -915,6 +1028,99 @@
 
                     // --- INICIALIZAÇÃO DE GRÁFICOS E MAPAS ---
                     
+                    const canvasVisaoValores = document.getElementById('chart-visao-valores');
+                    const canvasVisaoLotes = document.getElementById('chart-visao-lotes');
+
+                    if (canvasVisaoValores) {
+                        new Chart(canvasVisaoValores.getContext('2d'), {
+                            type: 'line',
+                            data: {
+                                labels: ['2025', '2026', 'Próximos Leilões'],
+                                datasets: [{
+                                    label: 'Valor (R$)',
+                                    data: [sum2025, sum2026, sumEstimativa],
+                                    borderColor: '#003366',
+                                    backgroundColor: 'rgba(0, 51, 102, 0.1)',
+                                    borderWidth: 3,
+                                    pointBackgroundColor: ['#9ca3af', '#3b82f6', '#22c55e'],
+                                    pointBorderColor: '#ffffff',
+                                    pointBorderWidth: 2,
+                                    pointRadius: 6,
+                                    pointHoverRadius: 8,
+                                    fill: true,
+                                    tension: 0.3
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
+                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
+                                        padding: 12, cornerRadius: 8,
+                                        callbacks: {
+                                            label: function(context) {
+                                                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            font: { family: "'Poppins', sans-serif", size: 10 },
+                                            callback: function(value) {
+                                                if (value >= 1000000) return 'R$ ' + (value / 1000000).toFixed(1) + 'M';
+                                                if (value >= 1000) return 'R$ ' + (value / 1000).toFixed(0) + 'k';
+                                                return 'R$ ' + value;
+                                            }
+                                        }
+                                    },
+                                    x: { ticks: { font: { family: "'Poppins', sans-serif", size: 11, weight: 'bold' } } }
+                                }
+                            }
+                        });
+                    }
+
+                    if (canvasVisaoLotes) {
+                        new Chart(canvasVisaoLotes.getContext('2d'), {
+                            type: 'pie',
+                            data: {
+                                labels: ['Imóveis 2025', 'Imóveis 2026', 'Próximos Leilões'],
+                                datasets: [{
+                                    data: [count2025, count2026, countEstimativa],
+                                    backgroundColor: ['#9ca3af', '#3b82f6', '#22c55e'],
+                                    borderWidth: 1,
+                                    borderColor: '#ffffff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { font: { family: "'Poppins', sans-serif", size: 11 }, boxWidth: 12, padding: 15 } },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
+                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
+                                        padding: 12, cornerRadius: 8,
+                                        callbacks: {
+                                            label: function(context) {
+                                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+
                     // 1. Gráfico da seção "Setor Atual"
                     const canvasSetorAtual = document.getElementById('chart-setor-atual');
                     if (canvasSetorAtual && labelsSetorAtual.length > 0) {
