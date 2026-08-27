@@ -105,7 +105,6 @@
             }[tag] || tag));
         }
 
-        // Função robusta para limpar nomes de colunas (tira acentos, espaços extras, etc.)
         function normalizeStr(str) {
             if (!str) return '';
             return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
@@ -208,7 +207,6 @@
                 
                 let dadosCompletos = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
 
-                // Remove linhas completamente vazias
                 let dadosValidos = dadosCompletos.filter(linha => {
                     let temInfo = false;
                     Object.values(linha).forEach(val => {
@@ -237,10 +235,13 @@
                     conteinerSecoes.innerHTML = '';
 
                     const colunasSet = new Set();
-                    dados.forEach(linha => Object.keys(linha).forEach(chave => colunasSet.add(chave)));
+                    dados.forEach(linha => Object.keys(linha).forEach(chave => {
+                        if (chave && !chave.startsWith('#') && !chave.startsWith('_')) {
+                            colunasSet.add(chave);
+                        }
+                    }));
                     const todasColunas = Array.from(colunasSet);
 
-                    // Pega o nome original da coluna baseado numa string normalizada
                     const getCol = (nomesArray) => {
                         return todasColunas.find(c => {
                             let cleanC = normalizeStr(c);
@@ -275,7 +276,6 @@
                     });
                     const colunaCadastro = getCol(['CADASTRO MUNICIPAL']);
 
-                    // Buscadores para a aba Lotes Arrematados
                     const colArrematados = getCol(['ARREMATADOS', 'ARREMATADO']);
                     const colLote = todasColunas.find(c => normalizeStr(c) === 'LOTE');
                     const colArrematante = getCol(['ARREMATANTE']);
@@ -284,7 +284,6 @@
                     const colDataAdj = getCol(['ADJUDICACAO', 'HOMOLOGACAO']);
                     const colImovelPrincipal = getCol(['IMOVEL']);
                     
-                    // Colunas antigas da aba Arrematados (fallback)
                     const colDataAntiga = todasColunas.find(c => normalizeStr(c) === 'DATA');
                     const colValorArremateAntigo = todasColunas.find(c => normalizeStr(c).includes('VALOR') && normalizeStr(c).includes('ARREMAT'));
 
@@ -292,14 +291,12 @@
                         colunasReaisSetores.push(colArrematados);
                     }
 
-                    // --- NOVA ABA: VISÃO GERAL DOS RESULTADOS ---
                     const idSecaoVisaoGeral = 'secao-visao-geral';
                     let sum2025 = 0, count2025 = 0;
                     let sum2026 = 0, count2026 = 0;
                     let sumTotal = 0, countTotal = 0;
                     let sumEstimativa = 0, countEstimativa = 0;
 
-                    // Busca a coluna de estimativa para os próximos leilões
                     const colEstimativaGeral = todasColunas.find(c => {
                         let n = normalizeStr(c);
                         return n.includes('ESTIMATIVA') || n.includes('AVALIACAO');
@@ -322,7 +319,6 @@
 
                         let isArrematadoValido = false;
 
-                        // Validação para os Lotes Arrematados
                         if (temV || temValorAntigo || temArrematante || temLote || temLocal || temValorPuro) {
                             let vValorFinal = (colValorPuro && linha[colValorPuro]) ? linha[colValorPuro] : (colValorArremateAntigo ? linha[colValorArremateAntigo] : null);
                             let numValor = window.parseDinheiro(vValorFinal);
@@ -339,7 +335,6 @@
                             }
                         }
 
-                        // Estimativa para próximos leilões (apenas os NÃO arrematados que possuem estimativa)
                         if (!isArrematadoValido && colEstimativaGeral) {
                             let valEst = window.parseDinheiro(linha[colEstimativaGeral]);
                             if (valEst > 0) {
@@ -559,7 +554,7 @@
                     const colunasMenu = todasColunas.filter(c => {
                         const cUpper = normalizeStr(c);
                         if (cUpper === 'IMOVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
-                        if (cUpper.replace(/\s+/g, '').includes('#_ABA') || cUpper === 'ANO') return false;
+                        if (cUpper.replace(/\s+/g, '').includes('#_ABA') || cUpper.includes('_ABA') || cUpper === 'ANO') return false;
                         if (cUpper === 'INVESTIMENTO REALIZADO' || cUpper === 'INVESTIMENTO') return false;
                         if (cUpper === 'MATRICULA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL' || cUpper === 'LOTE' || cUpper.includes('ARREMATANTE')) return false;
                         if (cUpper === 'LOCAL' || cUpper === 'VALOR' || cUpper.includes('ADJUDICACAO') || cUpper.includes('HOMOLOGACAO')) return false;
@@ -654,17 +649,13 @@
                                 let rawStatus = String(linha[coluna] || '-').trim();
                                 let customColorClass = null;
                                 
-                                // Procura por uma cor definida entre <> (ex: <VERMELHO>, <VERDE>)
                                 let match = rawStatus.match(/<([^>]+)>/);
                                 
                                 if (match) {
                                     let colorName = match[1].trim().toLowerCase();
-                                    
-                                    // Remove a tag de cor do texto original
                                     rawStatus = rawStatus.replace(match[0], '').trim();
                                     if (rawStatus === '') rawStatus = '-';
                                     
-                                    // Mapeia as cores em português para as classes do Tailwind
                                     const colorMap = {
                                         'verde': 'text-green-700 bg-green-100',
                                         'vermelho': 'text-red-700 bg-red-100',
@@ -686,10 +677,8 @@
                                 let corStatus = 'text-gray-600';
                                 
                                 if (customColorClass) {
-                                    // Se existir cor customizada, aplica ela
                                     corStatus = customColorClass + ' px-2 py-1 rounded';
                                 } else {
-                                    // Comportamento original
                                     if(statusTexto.toLowerCase().includes('regular') || statusTexto.toLowerCase().includes('ativo')) corStatus = 'text-green-600 bg-green-100 px-2 py-1 rounded';
                                     else if(statusTexto.toLowerCase().includes('pendente') || statusTexto.toLowerCase().includes('irregular')) corStatus = 'text-orange-600 bg-orange-100 px-2 py-1 rounded';
                                 }
@@ -915,7 +904,6 @@
                         `;
                     });
 
-                    // Aba Customizada: Lotes Arrematados
                     if (colArrematados || colValorArremateAntigo || colLote || colArrematante || colLocal || colValorPuro || colDataAdj) {
                         const idSecaoArrematados = 'secao-arrematados';
 
@@ -1026,7 +1014,7 @@
                     const colInvestimento = todasColunas.find(c => normalizeStr(c) === 'INVESTIMENTO REALIZADO' || normalizeStr(c) === 'INVESTIMENTO');
                     let colValorInv = todasColunas.find(c => normalizeStr(c) === 'VALOR');
                     if (!colValorInv && colInvestimento) {
-                        colValorInv = todasColunas.find(c => normalizeStr(c).includes('VALOR') && !normalizeStr(c).includes('ARREMATADO'));
+                        colValorInv = todasColunas.find(c => normalizeStr(c).includes('VALOR') && !normalizeStr(c).includes('ARREMATado'));
                     }
                     
                     if (colInvestimento) {
@@ -1077,7 +1065,7 @@
                                 if (num > 0 || c.val.includes('R$')) valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
                                 
                                 let bgClass = 'bg-white';
-                                let borderClass = 'border-gold'; // Contorno padrão
+                                let borderClass = 'border-amber-400';
                                 let invLower = c.inv.toLowerCase();
                                 
                                 if (invLower.includes('saldo em conta')) {
@@ -1165,8 +1153,6 @@
                         document.getElementById('page-title').innerHTML += ' <span class="text-[10px] bg-red-500 text-white px-2 py-1 rounded ml-2 align-middle" title="Erro de rede/CORS. Exibindo dados de teste.">MODO DEMO</span>';
                     }
 
-                    // --- INICIALIZAÇÃO DE GRÁFICOS E MAPAS ---
-                    
                     const canvasVisaoValores = document.getElementById('chart-visao-valores');
                     const canvasVisaoLotes = document.getElementById('chart-visao-lotes');
 
@@ -1260,7 +1246,6 @@
                         });
                     }
 
-                    // 1. Gráfico da seção "Setor Atual"
                     const canvasSetorAtual = document.getElementById('chart-setor-atual');
                     if (canvasSetorAtual && labelsSetorAtual.length > 0) {
                         const gerarCoresSetor = (qtd) => {
@@ -1309,7 +1294,6 @@
                         });
                     }
 
-                    // 2. Gráficos e Mapas dinâmicos para o restante do Menu
                     colunasMenu.forEach((coluna, index) => {
                         const idSecao = 'secao-' + index;
                         const cNorm = normalizeStr(coluna);
