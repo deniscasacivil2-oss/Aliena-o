@@ -37,6 +37,10 @@
         .status-cell > div { min-height: 100%; height: 100%; }
         .sidebar-content { min-width: 256px; }
         .leaflet-container { z-index: 10 !important; font-family: 'Poppins', sans-serif; }
+        .modern-map-popup .leaflet-popup-content-wrapper { border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.2); }
+        .modern-map-popup .leaflet-popup-tip { background-color: white; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
+        .modern-map-popup .leaflet-popup-content { margin: 6px 12px; }
+        .custom-marker { background: transparent; border: none; }
     </style>
 </head>
 <body class="flex min-h-screen">
@@ -555,6 +559,8 @@
                     const colunasMenu = todasColunas.filter(c => {
                         const cUpper = normalizeStr(c);
                         if (cUpper === 'IMOVEL' || cUpper === 'SETOR ATUAL' || cUpper === '') return false;
+                        if (cUpper.replace(/\s+/g, '').includes('#_ABA') || cUpper === 'ANO') return false;
+                        if (cUpper === 'INVESTIMENTO REALIZADO' || cUpper === 'INVESTIMENTO') return false;
                         if (cUpper === 'MATRICULA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL' || cUpper === 'LOTE' || cUpper.includes('ARREMATANTE')) return false;
                         if (cUpper === 'LOCAL' || cUpper === 'VALOR' || cUpper.includes('ADJUDICACAO') || cUpper.includes('HOMOLOGACAO')) return false;
                         if ((cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIACAO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
@@ -871,7 +877,7 @@
                             blockInferior = `
                             <div class="card p-8 flex flex-col items-center justify-center shadow-md">
                                 <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Mapa de Imóveis (${escapeHTML(coluna)})</h4>
-                                <div id="map-${idSecao}" class="h-[500px] w-full rounded-lg border border-gray-300 relative"></div>
+                                <div id="map-${idSecao}" class="h-[600px] w-full rounded-xl border-4 border-gray-100 relative z-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]"></div>
                             </div>
                             `;
                         } else if (!isStatusTab) {
@@ -1012,6 +1018,142 @@
                                         </table>
                                     </div>
                                 </div>
+                            </section>
+                        `;
+                    }
+
+                    const colAno = todasColunas.find(c => normalizeStr(c) === 'ANO');
+                    const colInvestimento = todasColunas.find(c => normalizeStr(c) === 'INVESTIMENTO REALIZADO' || normalizeStr(c) === 'INVESTIMENTO');
+                    let colValorInv = todasColunas.find(c => normalizeStr(c) === 'VALOR');
+                    if (!colValorInv && colInvestimento) {
+                        colValorInv = todasColunas.find(c => normalizeStr(c).includes('VALOR') && !normalizeStr(c).includes('ARREMATADO'));
+                    }
+                    
+                    if (colInvestimento) {
+                        const idSecaoInvestimento = 'secao-investimento';
+
+                        menuLateral.innerHTML += `
+                            <a href="#" onclick="showSection('${idSecaoInvestimento}', this, 'Investimento')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                                <i class="fa-solid fa-chart-column w-6 text-center"></i>
+                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">Investimento</span>
+                            </a>
+                        `;
+
+                        let cardsInvest = [];
+                        let rows2025 = [];
+                        let rows2026 = [];
+
+                        dados.forEach(linha => {
+                            let vAno = colAno ? String(linha[colAno] || '').trim() : '';
+                            let vInv = String(linha[colInvestimento] || '').trim();
+                            let vVal = colValorInv ? String(linha[colValorInv] || '').trim() : '';
+
+                            if (vInv === '-' || vInv === '') return;
+                            
+                            let isCard = vAno.toLowerCase().includes('card') || vInv.toLowerCase().includes('card');
+                            
+                            if (isCard) {
+                                let cleanInv = vInv;
+                                if(vAno.toLowerCase().includes('card') && !vInv.toLowerCase().includes('card')) {
+                                    cleanInv = vInv;
+                                } else {
+                                    cleanInv = vInv.replace(/card/ig, '').trim();
+                                    if(cleanInv === '') cleanInv = 'Destaque';
+                                }
+                                cardsInvest.push({ inv: cleanInv, val: vVal });
+                            } else if (vAno.includes('2025')) {
+                                rows2025.push({ inv: vInv, val: vVal });
+                            } else if (vAno.includes('2026')) {
+                                rows2026.push({ inv: vInv, val: vVal });
+                            }
+                        });
+
+                        let cardsHtmlInv = '';
+                        if (cardsInvest.length > 0) {
+                            cardsHtmlInv = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">';
+                            cardsInvest.forEach(c => {
+                                let num = window.parseDinheiro(c.val);
+                                let valStr = c.val;
+                                if (num > 0 || c.val.includes('R$')) valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+                                
+                                let bgClass = 'bg-white';
+                                let borderClass = 'border-gold'; // Contorno padrão
+                                let invLower = c.inv.toLowerCase();
+                                
+                                if (invLower.includes('saldo em conta')) {
+                                    bgClass = 'bg-gray-100';
+                                    borderClass = 'border-gray-500';
+                                } else if (invLower.includes('suplementação') || invLower.includes('suplementacao') || invLower.includes('disponível')) {
+                                    bgClass = 'bg-green-100';
+                                    borderClass = 'border-green-600';
+                                } else if (invLower.includes('saldo livre')) {
+                                    bgClass = 'bg-orange-100';
+                                    borderClass = 'border-orange-500';
+                                }
+
+                                cardsHtmlInv += `
+                                    <div class="card p-5 border-l-4 ${borderClass} ${bgClass} shadow-sm flex flex-col justify-center">
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">${escapeHTML(c.inv)}</p>
+                                        <h3 class="text-xl lg:text-2xl font-black text-navy mt-1">${escapeHTML(valStr)}</h3>
+                                    </div>
+                                `;
+                            });
+                            cardsHtmlInv += '</div>';
+                        }
+
+                        const buildTable = (rows, title) => {
+                            if (rows.length === 0) return '';
+                            let html = `
+                                <div class="card overflow-hidden shadow-md bg-white w-full h-full flex flex-col">
+                                    <div class="p-4 bg-gray-200 border-b border-gray-300">
+                                        <h4 class="font-bold text-navy uppercase text-sm tracking-widest text-center">${title}</h4>
+                                    </div>
+                                    <div class="w-full flex-grow overflow-x-auto custom-scrollbar">
+                                        <table class="w-full text-left text-xs border-collapse min-w-[300px]">
+                                            <thead class="uppercase text-[10px] bg-gray-100 text-gray-600 shadow-sm">
+                                                <tr>
+                                                    <th class="p-3 text-left border-r border-gray-200 w-[70%]">Investimento Realizado</th>
+                                                    <th class="p-3 text-center w-[30%]">Valor</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="text-gray-800 font-medium">
+                            `;
+                            
+                            rows.forEach((r, i) => {
+                                let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 hover:bg-gray-100 transition-colors`;
+                                let num = window.parseDinheiro(r.val);
+                                let valStr = r.val;
+                                if (num > 0 || r.val.includes('R$')) valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+
+                                html += `
+                                    <tr class="${trClasses}">
+                                        <td class="p-3 text-left font-bold text-navy whitespace-normal border-r border-gray-200">${escapeHTML(r.inv)}</td>
+                                        <td class="p-3 text-center text-gray-700 font-semibold">${escapeHTML(valStr)}</td>
+                                    </tr>
+                                `;
+                            });
+                            
+                            html += `</tbody></table></div></div>`;
+                            return html;
+                        };
+
+                        let table2025Html = buildTable(rows2025, 'Investimentos 2025');
+                        let table2026Html = buildTable(rows2026, 'Investimentos 2026');
+                        
+                        let gridsHtml = '';
+                        if(rows2025.length > 0 || rows2026.length > 0) {
+                             gridsHtml = `
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                                    ${table2025Html}
+                                    ${table2026Html}
+                                </div>
+                             `;
+                        }
+
+                        conteinerSecoes.innerHTML += `
+                            <section id="${idSecaoInvestimento}" class="section-content">
+                                ${cardsHtmlInv}
+                                ${gridsHtml}
                             </section>
                         `;
                     }
@@ -1179,25 +1321,33 @@
                                 window.appMaps = window.appMaps || {};
                                 
                                 const map = L.map(mapContainer).setView([-20.7383, -48.9133], 13);
-                                const mapaRuas = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                                    maxZoom: 19,
-                                    attribution: '© OpenStreetMap contributors © CARTO'
+                                const mapaRuas = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                                    maxZoom: 20,
+                                    attribution: '© Google'
                                 });
-                                const mapaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                                    maxZoom: 19,
-                                    attribution: '&copy; Esri'
+                                const mapaSatelite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                                    maxZoom: 20,
+                                    attribution: '© Google'
                                 });
 
                                 mapaRuas.addTo(map);
                                 L.control.layers({
-                                    "Mapa de Ruas": mapaRuas,
-                                    "Visão por Satélite": mapaSatelite
+                                    "Modo Mapa (Claro)": mapaRuas,
+                                    "Modo Satélite": mapaSatelite
                                 }).addTo(map);
 
                                 let bounds = L.latLngBounds();
                                 let hasValidMarkers = false;
 
                                 window.appMarkers = window.appMarkers || {};
+
+                                const customIcon = L.divIcon({
+                                    className: 'custom-marker',
+                                    html: `<div class="bg-navy text-gold w-8 h-8 flex items-center justify-center rounded-full shadow-lg border-2 border-gold hover:bg-gold hover:text-navy transition-all duration-300 relative group cursor-pointer"><i class="fa-solid fa-location-dot text-[14px]"></i><div class="absolute -bottom-[5px] left-1/2 w-2.5 h-2.5 bg-navy border-b-2 border-r-2 border-gold transform rotate-45 -translate-x-1/2 group-hover:bg-gold transition-colors duration-300"></div></div>`,
+                                    iconSize: [32, 38],
+                                    iconAnchor: [16, 38],
+                                    popupAnchor: [0, -40]
+                                });
 
                                 dados.forEach(d => {
                                     let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
@@ -1210,11 +1360,16 @@
                                         let lat = coords[0];
                                         let lng = coords[1];
                                         if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                                            let marker = L.marker([lat, lng]).addTo(map)
-                                                .bindPopup(`<div class="font-bold text-[12px] uppercase text-navy">${imovelLimpo}</div>`)
+                                            let marker = L.marker([lat, lng], {icon: customIcon}).addTo(map)
+                                                .bindPopup(`
+                                                    <div class="p-1 text-center min-w-[150px]">
+                                                        <div class="font-black text-[11px] uppercase tracking-wider text-navy mb-2 pb-1 border-b-2 border-gold inline-block">${imovelLimpo}</div>
+                                                        <div class="text-[9px] font-bold text-gray-500 bg-gray-50 rounded px-2 py-1.5 border border-gray-200 inline-block w-full"><i class="fa-solid fa-map-pin text-gold mr-1"></i> ${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+                                                    </div>
+                                                `, { className: 'modern-map-popup' })
                                                 .bindTooltip(`<div class="font-bold text-[10px] uppercase text-navy">${imovelLimpo}</div>`, {
                                                     direction: 'top', 
-                                                    offset: [0, -35],
+                                                    offset: [0, -40],
                                                     opacity: 0.95
                                                 });
                                             window.appMarkers[`${idSecao}_${lat}_${lng}`] = marker;
@@ -1225,7 +1380,7 @@
                                 });
 
                                 if (hasValidMarkers) {
-                                    setTimeout(() => { map.fitBounds(bounds, { padding: [40, 40] }); }, 500);
+                                    setTimeout(() => { map.fitBounds(bounds, { padding: [50, 50] }); }, 500);
                                 }
                                 window.appMaps[idSecao] = map;
                             }
