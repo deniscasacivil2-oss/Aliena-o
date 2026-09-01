@@ -1,3 +1,7 @@
+<!-- Chosen Palette: Navy & Gold Modern Dashboard -->
+<!-- Application Structure Plan: Interactive single-page application for real estate alienation monitoring in Olímpia (2026). Includes executive overview cards, sector status overview, detailed metric views with dynamic Chart.js charts, an interactive Leaflet map for coordinates, and a dedicated table for auctioned lots displaying all lot rows up to and including the Total row, discarding any lines below it. -->
+<!-- Visualization & Content Choices: Standard Chart.js line and pie charts, Leaflet.js interactive canvas map, Tailwind CSS styling, responsive HTML tables. CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -235,7 +239,7 @@
                     conteinerSecoes.innerHTML = '';
 
                     const colunasSet = new Set();
-                    dados.forEach(linha => Object.keys(linha).forEach(chave => {
+                    dadosValidos.forEach(linha => Object.keys(linha).forEach(chave => {
                         if (chave && !chave.startsWith('#') && !chave.startsWith('_')) {
                             colunasSet.add(chave);
                         }
@@ -914,45 +918,94 @@
                             </a>
                         `;
 
-                        let dadosArrematados = dados.filter(linha => {
-                            let vStatus = colArrematados ? String(linha[colArrematados] || '').trim().toLowerCase() : '';
-                            let temLote = colLote && linha[colLote] && String(linha[colLote]).trim() !== '-' && String(linha[colLote]).trim() !== '';
-                            let temArrematante = colArrematante && linha[colArrematante] && String(linha[colArrematante]).trim() !== '-' && String(linha[colArrematante]).trim() !== '';
-                            let temLocal = colLocal && linha[colLocal] && String(linha[colLocal]).trim() !== '-' && String(linha[colLocal]).trim() !== '';
-                            let temValorPuro = colValorPuro && linha[colValorPuro] && String(linha[colValorPuro]).trim() !== '-' && String(linha[colValorPuro]).trim() !== '';
+                        const findCol = (keywords) => {
+                            return todasColunas.find(c => {
+                                let cn = normalizeStr(c);
+                                return keywords.some(kw => {
+                                    let kwn = normalizeStr(kw);
+                                    if (kwn.length <= 4) {
+                                        return cn === kwn || cn.startsWith(kwn + ' ') || cn.endsWith(' ' + kwn) || cn.includes(' ' + kwn + ' ');
+                                    }
+                                    return cn.includes(kwn);
+                                });
+                            });
+                        };
 
-                            let temV = vStatus === 'v' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus) || vStatus === 'sim';
+                        const cArrematante = findCol(['ARREMATANTE', 'ARREMATANTES', 'COMPRADOR']) || colArrematante;
+                        const cLote = findCol(['LOTE', 'LOTES', 'NUMERO DO LOTE', 'N° LOTE', 'Nº LOTE']) || colLote;
+                        const cLocal = findCol(['LOCAL', 'LOCALIZACAO', 'ENDERECO']) || colLocal || colImovelPrincipal;
+                        const cValor = findCol(['VALOR ARREMATADO', 'VALOR ARREMATE', 'VALOR DE ARREMATE', 'VALOR ADJUDICADO', 'VALOR']) || colValorPuro || colValorArremateAntigo;
+                        const cData = findCol(['ADJUDICACAO', 'HOMOLOGACAO', 'DATA DE ADJUDICACAO', 'DATA DA HOMOLOGACAO', 'DATA']) || colDataAdj || colDataAntiga;
+
+                        const checkIsTotalRow = (linha) => {
+                            if (!linha) return false;
+                            if (linha === linhaTotal) return true;
                             
-                            let vValorAntigo = colValorArremateAntigo ? String(linha[colValorArremateAntigo] || '').trim() : '';
-                            let temValorAntigo = false;
-                            if (vValorAntigo !== '' && vValorAntigo !== '-') {
-                                if (window.parseDinheiro(vValorAntigo) > 0) temValorAntigo = true;
+                            const keysToCheck = [cArrematante, cLocal, colImovelPrincipal, cLote, 'ORDEM', 'IMOVEL', 'IMÓVEL', 'LOCAL'];
+                            for (let key of keysToCheck) {
+                                if (key && linha[key]) {
+                                    let val = normalizeStr(linha[key]);
+                                    if (val === 'TOTAL' || val.startsWith('TOTAL ') || val.startsWith('TOTAL:') || val.startsWith('TOTAL -')) {
+                                        return true;
+                                    }
+                                }
                             }
+                            return false;
+                        };
 
-                            return temV || temValorAntigo || temArrematante || temLote || temLocal || temValorPuro;
-                        });
+                        let dadosParaArrematados = [];
+
+                        for (let i = 0; i < dadosValidos.length; i++) {
+                            let linha = dadosValidos[i];
+                            let isTot = checkIsTotalRow(linha);
+
+                            let vArrematante = cArrematante && linha[cArrematante] ? String(linha[cArrematante]).trim() : '';
+                            let vLote = cLote && linha[cLote] ? String(linha[cLote]).trim() : '';
+                            let vLocal = cLocal && linha[cLocal] ? String(linha[cLocal]).trim() : '';
+                            let vValor = cValor && linha[cValor] ? String(linha[cValor]).trim() : '';
+                            let vData = cData && linha[cData] ? String(linha[cData]).trim() : '';
+                            let vStatus = colArrematados && linha[colArrematados] ? String(linha[colArrematados]).trim().toLowerCase() : '';
+
+                            let temArrematante = vArrematante !== '' && vArrematante !== '-';
+                            let temLote = vLote !== '' && vLote !== '-';
+                            let temLocal = vLocal !== '' && vLocal !== '-';
+                            let temValor = (vValor !== '' && vValor !== '-') && (window.parseDinheiro(vValor) > 0 || vValor.includes('R$') || /\d/.test(vValor));
+                            let temData = vData !== '' && vData !== '-';
+                            let temV = vStatus === 'v' || vStatus === 'sim' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus);
+
+                            if (temArrematante || temLote || temV || temValor || temData || temLocal || isTot) {
+                                dadosParaArrematados.push(linha);
+                                if (isTot) {
+                                    break;
+                                }
+                            }
+                        }
 
                         let linhasHtmlArrematados = '';
 
-                        dadosArrematados.forEach((linha, i) => {
-                            let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
-                            
-                            let arrematanteTexto = colArrematante ? escapeHTML(linha[colArrematante] || '-') : '-';
-                            let loteTexto = colLote ? escapeHTML(linha[colLote] || '-') : '-';
-                            let localTexto = colLocal && linha[colLocal] ? escapeHTML(linha[colLocal]) : escapeHTML(linha[colImovelPrincipal] || linha['IMÓVEL'] || '-');
+                        dadosParaArrematados.forEach((linha, idx) => {
+                            let isRowTotal = checkIsTotalRow(linha);
 
-                            let vValorFinal = (colValorPuro && linha[colValorPuro]) ? linha[colValorPuro] : (colValorArremateAntigo ? linha[colValorArremateAntigo] : null);
+                            let arrematanteTexto = cArrematante && linha[cArrematante] ? escapeHTML(String(linha[cArrematante]).trim()) : '-';
+                            let loteTexto = cLote && linha[cLote] ? escapeHTML(String(linha[cLote]).trim()) : '-';
+                            
+                            let rawLocal = cLocal && linha[cLocal] ? String(linha[cLocal]).trim() : (colImovelPrincipal && linha[colImovelPrincipal] ? String(linha[colImovelPrincipal]).trim() : '-');
+                            let localTexto = escapeHTML(rawLocal).replace(/\r?\n/g, '<br>');
+
+                            let vValorFinal = cValor && linha[cValor] ? linha[cValor] : null;
                             let valorArremateTexto = '-';
-                            if (vValorFinal) {
+                            if (vValorFinal && String(vValorFinal).trim() !== '' && String(vValorFinal).trim() !== '-') {
                                 let numValor = window.parseDinheiro(vValorFinal);
                                 if (numValor > 0) {
                                     valorArremateTexto = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor));
+                                } else {
+                                    valorArremateTexto = escapeHTML(String(vValorFinal).trim());
                                 }
                             }
 
                             let dataTexto = '-';
-                            let vDataFinal = (colDataAdj && linha[colDataAdj]) ? linha[colDataAdj] : (colDataAntiga ? linha[colDataAntiga] : null);
-                            if (vDataFinal) {
+                            let vDataFinal = cData && linha[cData] ? linha[cData] : null;
+                            if (vDataFinal && String(vDataFinal).trim() !== '' && String(vDataFinal).trim() !== '-') {
                                 let strDate = String(vDataFinal).trim();
                                 if (strDate.includes('T') && strDate.match(/^\d{4}-\d{2}-\d{2}T/)) {
                                     let partes = strDate.split('T')[0].split('-');
@@ -967,6 +1020,15 @@
                                 }
                             }
 
+                            let trClasses = '';
+                            if (isRowTotal) {
+                                trClasses = 'bg-blue-50 border-t-2 border-blue-200 font-bold hover:bg-blue-100 transition-colors shadow-inner';
+                                if (arrematanteTexto === '-' || arrematanteTexto === '') arrematanteTexto = 'TOTAL';
+                                if (loteTexto === '') loteTexto = '-';
+                            } else {
+                                trClasses = `${idx % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
+                            }
+
                             linhasHtmlArrematados += `
                                 <tr class="${trClasses}">
                                     <td class="p-3 text-left font-bold text-navy whitespace-normal break-words">${arrematanteTexto}</td>
@@ -978,7 +1040,7 @@
                             `;
                         });
 
-                        if (dadosArrematados.length === 0) {
+                        if (dadosParaArrematados.length === 0) {
                             let colunasInfo = escapeHTML(todasColunas.join(', '));
                             linhasHtmlArrematados = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">
                                 Nenhum lote arrematado encontrado.<br>
@@ -1014,7 +1076,7 @@
                     const colInvestimento = todasColunas.find(c => normalizeStr(c) === 'INVESTIMENTO REALIZADO' || normalizeStr(c) === 'INVESTIMENTO');
                     let colValorInv = todasColunas.find(c => normalizeStr(c) === 'VALOR');
                     if (!colValorInv && colInvestimento) {
-                        colValorInv = todasColunas.find(c => normalizeStr(c).includes('VALOR') && !normalizeStr(c).includes('ARREMATado'));
+                        colValorInv = todasColunas.find(c => normalizeStr(c).includes('VALOR') && !normalizeStr(c).includes('ARREMATADO'));
                     }
                     
                     if (colInvestimento) {
