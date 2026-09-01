@@ -7,8 +7,8 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
@@ -22,7 +22,6 @@
         .bg-navy { background-color: #003366; }
         .text-gold { color: #ffb800; }
         .border-gold { border-color: #ffb800; }
-        .text-gray-contrast { color: #475569; }
         .section-content { display: none; }
         .section-content.active { display: block; animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -45,7 +44,6 @@
 </head>
 <body class="flex min-h-screen">
 
-    <!-- Sidebar Lateral -->
     <aside id="sidebar" class="sidebar text-white flex-shrink-0 flex flex-col transition-all duration-300 w-64 overflow-hidden h-screen sticky top-0 z-50">
         <div class="sidebar-content flex flex-col h-full">
             <div class="p-6 text-center border-b border-blue-900">
@@ -69,7 +67,6 @@
         </div>
     </aside>
 
-    <!-- Conteúdo Principal -->
     <main class="flex-grow flex flex-col min-w-0 w-full">
         <header class="bg-white border-b h-16 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm">
             <div class="flex items-center space-x-4">
@@ -1021,6 +1018,7 @@
                                 trClasses = 'bg-blue-50 border-t-2 border-blue-200 font-bold hover:bg-blue-100 transition-colors shadow-inner';
                                 if (arrematanteTexto === '-' || arrematanteTexto === '') arrematanteTexto = 'TOTAL';
                                 if (loteTexto === '') loteTexto = '-';
+                                if (localTexto.toUpperCase().trim() === 'TOTAL' || localTexto.toUpperCase().trim().startsWith('TOTAL')) localTexto = '-';
                             } else {
                                 trClasses = `${idx % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
                             }
