@@ -1,34 +1,39 @@
+<!-- Chosen Palette: Navy and Gold Classic (Navy Blue #003366, Gold #FFB800, Light Neutral #F8FAFC) -->
+<!-- Application Structure Plan: Interactive single-page dashboard designed for municipal asset management. It organizes data logically across 'Visão Geral dos Resultados', 'Setor Atual' (tramitation matrix), specific property attribute tabs, 'Lotes Arrematados', and 'Investimentos'. The layout prioritizes executive summaries, Leaflet spatial mapping, dynamic Chart.js visualizations, and granular tabular filtering. -->
+<!-- Visualization & Content Choices: 1. Overview financials -> Line & Pie Charts (Chart.js Canvas) -> Dynamic tooltips & revenue tracking. 2. Sector tramitation -> Dynamic Matrix Table + Pie Chart -> Color-coded workflow badges. 3. Coordinates -> Interactive Leaflet Map -> Marker popups & row focus. 4. Lotes Arrematados -> Clean tabular list with strict truncation at 'TOTAL' row and explicit footer totals. Confirming NO SVG graphics and NO Mermaid JS. -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Olímpia 2026</title>
-    
+    <title>Dashboard Olímpia 2026 - Alienação de Imóveis</title>
+        
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
-        body { font-family: 'Poppins', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+        body { font-family: 'Poppins', sans-serif; background-color: #f8fafc; color: #1e293b; }
         .sidebar { background-color: #003366; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.15); border: 1px solid #e2e8f0; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.05); border: 1px solid #e2e8f0; }
         .nav-link { transition: all 0.2s; border-radius: 8px; }
-        .nav-link.active { background-color: #ffb800; color: #003366 !important; font-weight: 600; }
+        .nav-link.active { background-color: #ffb800; color: #003366 !important; font-weight: 700; }
         .text-navy { color: #003366; }
         .bg-navy { background-color: #003366; }
         .text-gold { color: #ffb800; }
+        .bg-gold { background-color: #ffb800; }
         .border-gold { border-color: #ffb800; }
         .section-content { display: none; }
-        .section-content.active { display: block; animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .section-content.active { display: block; animation: fadeIn 0.35s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .logo-container img { object-fit: contain; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .custom-scrollbar::-webkit-scrollbar { height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -38,54 +43,71 @@
         .leaflet-container { z-index: 10 !important; font-family: 'Poppins', sans-serif; }
         .modern-map-popup .leaflet-popup-content-wrapper { border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.2); }
         .modern-map-popup .leaflet-popup-tip { background-color: white; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
-        .modern-map-popup .leaflet-popup-content { margin: 6px 12px; }
+        .modern-map-popup .leaflet-popup-content { margin: 8px 14px; }
         .custom-marker { background: transparent; border: none; }
+        
+        /* Chart container constraint specification */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 320px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container { height: 350px; }
+        }
     </style>
 </head>
 <body class="flex min-h-screen">
 
+    <!-- Sidebar Navigation -->
     <aside id="sidebar" class="sidebar text-white flex-shrink-0 flex flex-col transition-all duration-300 w-64 overflow-hidden h-screen sticky top-0 z-50">
         <div class="sidebar-content flex flex-col h-full">
             <div class="p-6 text-center border-b border-blue-900">
-                <div class="bg-white p-2 rounded-lg mb-4 inline-block logo-container shadow-lg">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/30/Bras%C3%A3o_de_Ol%C3%ADmpia%2C_SP.jpg" alt="Brasão de Olímpia" class="h-16">
+                <div class="bg-white p-2 rounded-lg mb-3 inline-block logo-container shadow-lg">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/30/Bras%C3%A3o_de_Ol%C3%ADmpia%2C_SP.jpg" alt="Brasão de Olímpia" class="h-14 mx-auto">
                 </div>
-                <h2 class="text-[10px] font-bold tracking-widest uppercase text-blue-100 leading-tight px-2">Relatório de Imóveis em Alienação</h2>
+                <h2 class="text-[11px] font-bold tracking-widest uppercase text-blue-100 leading-tight px-1">Alienação de Imóveis Públicos</h2>
+                <p class="text-[9px] text-amber-300 uppercase tracking-wider mt-1">Gestão de Patrimônio</p>
             </div>
             
-            <nav id="menu-lateral" class="flex-grow p-4 space-y-2 mt-4 overflow-y-auto no-scrollbar">
+            <nav id="menu-lateral" class="flex-grow p-4 space-y-2 mt-2 overflow-y-auto no-scrollbar">
                 <div class="animate-pulse flex items-center space-x-3 p-3">
                     <div class="rounded-full bg-blue-800 h-6 w-6"></div>
                     <div class="h-4 bg-blue-800 rounded w-3/4"></div>
                 </div>
             </nav>
 
-            <div class="p-6 bg-blue-950 text-[10px] text-blue-300 mt-auto border-t border-blue-900">
-                <p class="font-bold">Divisão de Governança, Processos e Projetos Estratégicos</p>
+            <div class="p-5 bg-blue-950 text-[10px] text-blue-300 mt-auto border-t border-blue-900">
+                <p class="font-bold text-white mb-0.5">Divisão de Governança, Processo e Projetos Estratégicos</p>
                 <p>Casa Civil | Município de Olímpia - SP</p>
             </div>
         </div>
     </aside>
 
+    <!-- Main Content Area -->
     <main class="flex-grow flex flex-col min-w-0 w-full">
-        <header class="bg-white border-b h-16 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm">
+        <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 md:px-8 sticky top-0 z-40 shadow-sm">
             <div class="flex items-center space-x-4">
                 <button onclick="toggleSidebar()" class="text-navy hover:text-blue-600 transition-colors focus:outline-none" aria-label="Alternar Menu">
                     <i class="fa-solid fa-bars text-xl"></i>
                 </button>
-                <h1 id="page-title" class="text-xl font-bold text-navy uppercase tracking-tight">Carregando...</h1>
+                <h1 id="page-title" class="text-lg md:text-xl font-extrabold text-navy uppercase tracking-tight truncate">Carregando Painel...</h1>
             </div>
             <div class="flex items-center space-x-3">
-                <span class="bg-blue-100 text-navy px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Ano 2026</span>
-                <div class="h-8 w-8 rounded-full bg-navy text-gold flex items-center justify-center font-bold text-xs shadow-md border-2 border-gold">OP</div>
+                <span class="bg-blue-100 text-navy px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest hidden sm:inline-block">Exercício 2026</span>
+                <div class="h-9 w-9 rounded-full bg-navy text-gold flex items-center justify-center font-black text-xs shadow-md border-2 border-gold" title="Município de Olímpia">OP</div>
             </div>
         </header>
 
         <div id="conteiner-secoes" class="p-4 md:p-8 w-full mx-auto max-w-[1400px]">
-            <div class="flex flex-col items-center justify-center h-64 text-navy mt-20">
+            <div class="flex flex-col items-center justify-center h-64 text-navy mt-16">
                 <i class="fa-solid fa-spinner fa-spin text-5xl mb-4 text-gold"></i>
-                <h2 class="text-xl font-bold uppercase tracking-widest">Sincronizando Dados</h2>
-                <p class="text-sm text-gray-500 mt-2">Construindo painéis a partir da nuvem...</p>
+                <h2 class="text-lg font-bold uppercase tracking-widest">Sincronizando Dados Municipais</h2>
+                <p class="text-xs text-gray-500 mt-1">Carregando registros de patrimônio e leilões...</p>
             </div>
         </div>
     </main>
@@ -129,7 +151,7 @@
             document.getElementById('page-title').innerText = titulo;
             
             if (window.appMaps && window.appMaps[sectionId]) {
-                setTimeout(() => { window.appMaps[sectionId].invalidateSize(); }, 50);
+                setTimeout(() => { window.appMaps[sectionId].invalidateSize(); }, 100);
             }
 
             if (window.innerWidth < 768) {
@@ -184,13 +206,22 @@
                     if (!resposta.ok) throw new Error("Erro HTTP: " + resposta.status);
                     textoResposta = await resposta.text();
                 } catch (fetchErro) {
-                    console.warn("Falha de rede (CORS ou Sandbox). Usando dados de demonstração.", fetchErro);
+                    console.warn("Falha de rede ou restrição CORS. Utilizando base demonstrativa local.", fetchErro);
                     usandoMock = true;
                     const mockData = [
-                        { "ORDEM": "1", "IMÓVEL": "Terreno Central", "MATRÍCULA": "12345", "ÁREA": "500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 150.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "v", "JURÍDIC": "v", "COORDENADA": "-20.7383, -48.9133", "ARREMATADOS": "v", "VALOR ARREMATADO": "R$ 160.000,00", "DATA": "15/05/2026", "PAGAMENTO": "À vista", "CADASTRO MUNICIPAL": "11.22.33", "LOTE": "01", "ARREMATANTE": "João Silva" },
-                        { "ORDEM": "2", "IMÓVEL": "Prédio Antigo", "MATRÍCULA": "67890", "ÁREA": "1200 m²", "STATUS": "Pendente", "ESTIMATIVA": "R$ 850.000,00", "CASA CIVIL": "v", "OBRA": "x aguardando laudo", "LICITA": "-", "JURÍDIC": "-", "COORDENADA": "-20.7400, -48.9100", "ARREMATADOS": "-", "VALOR ARREMATADO": "-", "DATA": "-", "PAGAMENTO": "-", "CADASTRO MUNICIPAL": "44.55.66" },
-                        { "ORDEM": "3", "IMÓVEL": "Loteamento Novo de Expansão Urbana", "MATRÍCULA": "54321", "ÁREA": "300 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 100.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "andamento", "JURÍDIC": "-", "COORDENADA": "-20.7350, -48.9200", "ARREMATADOS": "v", "VALOR ARREMATADO": "120000", "DATA": "10/06/2026", "PAGAMENTO": "Parcelado em 12x", "CADASTRO MUNICIPAL": "77.88.99", "LOTE": "05", "ARREMATANTE": "Empresa XYZ Participações S.A." },
-                        { "ORDEM": "TOTAL", "IMÓVEL": "TOTAL", "ESTIMATIVA": "R$ 1.100.000,00", "VALOR ARREMATADO": "R$ 280.000,00" }
+                        { "_ABA": "Imóveis", "ORDEM": "1", "IMÓVEL": "Terreno Central - Av. Aurora Forti Neves", "MATRÍCULA": "12345", "ÁREA": "500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 150.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "v", "JURÍDIC": "v", "COORDENADA": "-20.7383, -48.9133", "CADASTRO MUNICIPAL": "11.22.33" },
+                        { "_ABA": "Imóveis", "ORDEM": "2", "IMÓVEL": "Prédio Comercial Antigo - Centro", "MATRÍCULA": "67890", "ÁREA": "1200 m²", "STATUS": "Pendente", "ESTIMATIVA": "R$ 850.000,00", "CASA CIVIL": "v", "OBRA": "x aguardando laudo", "LICITA": "-", "JURÍDIC": "-", "COORDENADA": "-20.7400, -48.9100", "CADASTRO MUNICIPAL": "44.55.66" },
+                        { "_ABA": "Imóveis", "ORDEM": "3", "IMÓVEL": "Área Industrial Leste - Lote 04", "MATRÍCULA": "99123", "ÁREA": "3500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 1.200.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "Em andamento", "JURÍDIC": "v", "COORDENADA": "-20.7310, -48.8950", "CADASTRO MUNICIPAL": "77.88.99" },
+                        
+                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "João Silva Empreendimentos", "LOTE": "01", "LOCAL": "Av. Aurora Forti Neves", "VALOR": "R$ 160.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "15/05/2026" },
+                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "Construtora Olímpia Ltda", "LOTE": "02", "LOCAL": "Rua São João, 450", "VALOR": "R$ 320.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "20/06/2026" },
+                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "TOTAL", "LOTE": "2 lotes", "LOCAL": "-", "VALOR": "R$ 480.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "-" },
+
+                        { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Saldo em conta", "VALOR": "R$ 500.000,00" },
+                        { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Disponível para uso de suplementação", "VALOR": "R$ 200.000,00" },
+                        { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Saldo livre", "VALOR": "R$ 100.000,00" },
+                        { "_ABA": "Investimento", "ANO": "2025", "INVESTIMENTO REALIZADO": "Reforma da Praça Central e Vias Urbanas", "VALOR": "R$ 150.000,00" },
+                        { "_ABA": "Investimento", "ANO": "2026", "INVESTIMENTO REALIZADO": "Pavimentação e Infraestrutura Bairro Novo", "VALOR": "R$ 300.000,00" }
                     ];
                     textoResposta = JSON.stringify(mockData);
                 }
@@ -199,32 +230,76 @@
                 try {
                     dadosBrutos = JSON.parse(textoResposta);
                 } catch (parseErro) {
-                    throw new Error("Formato JSON Inválido");
+                    throw new Error("Formato de resposta JSON inválido");
                 }
                 
                 let dadosCompletos = Array.isArray(dadosBrutos) ? dadosBrutos : [dadosBrutos];
 
                 let dadosValidos = dadosCompletos.filter(linha => {
                     let temInfo = false;
-                    Object.values(linha).forEach(val => {
-                        if (String(val).trim() !== '' && String(val).trim() !== '-') temInfo = true;
+                    Object.entries(linha).forEach(([k, val]) => {
+                        if (k && !k.startsWith('#') && !k.startsWith('_') && String(val).trim() !== '' && String(val).trim() !== '-') {
+                            temInfo = true;
+                        }
                     });
                     return temInfo;
                 });
 
-                let linhaTotal = dadosValidos.find(linha => {
+                // Isolate rows by Tab (_ABA) if property exists
+                let dadosImoveis = [];
+                let dadosArrematadosRaw = [];
+                let dadosInvestimentoRaw = [];
+
+                let temPropAba = dadosValidos.some(l => l['_ABA'] || l['ABA']);
+
+                dadosValidos.forEach(linha => {
+                    let abaNorm = normalizeStr(linha['_ABA'] || linha['ABA'] || '');
+                    if (abaNorm.includes('ARREMATAD') || abaNorm.includes('LEILAO')) {
+                        dadosArrematadosRaw.push(linha);
+                    } else if (abaNorm.includes('INVESTIMEN')) {
+                        dadosInvestimentoRaw.push(linha);
+                    } else {
+                        dadosImoveis.push(linha);
+                    }
+                });
+
+                // If no distinct 'ARREMATAD' tab in _ABA property, check imoveis rows
+                if (dadosArrematadosRaw.length === 0) {
+                    dadosValidos.forEach(linha => {
+                        let abaNorm = normalizeStr(linha['_ABA'] || linha['ABA'] || '');
+                        if (!abaNorm.includes('INVESTIMEN')) {
+                            let keys = Object.keys(linha);
+                            let colArrematados = keys.find(c => normalizeStr(c).includes('ARREMATAD'));
+                            let colArrematante = keys.find(c => normalizeStr(c).includes('ARREMATANTE'));
+                            let colLote = keys.find(c => normalizeStr(c) === 'LOTE');
+                            let colValorPuro = keys.find(c => normalizeStr(c) === 'VALOR');
+
+                            let vStatus = colArrematados ? String(linha[colArrematados] || '').trim().toLowerCase() : '';
+                            let temLote = colLote && linha[colLote] && String(linha[colLote]).trim() !== '-' && String(linha[colLote]).trim() !== '';
+                            let temArrematante = colArrematante && linha[colArrematante] && String(linha[colArrematante]).trim() !== '-' && String(linha[colArrematante]).trim() !== '';
+                            let temValorPuro = colValorPuro && linha[colValorPuro] && String(linha[colValorPuro]).trim() !== '-' && String(linha[colValorPuro]).trim() !== '';
+                            let temV = vStatus === 'v' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus) || vStatus === 'sim';
+
+                            if (temV || temArrematante || temLote || temValorPuro) {
+                                dadosArrematadosRaw.push(linha);
+                            }
+                        }
+                    });
+                }
+
+                // Extract Imóveis main TOTAL row if present
+                let linhaTotalImoveis = dadosImoveis.find(linha => {
                     let keys = Object.keys(linha);
                     let colImovel = keys.find(k => normalizeStr(k) === 'IMOVEL');
                     let colOrdem = keys.find(k => normalizeStr(k) === 'ORDEM');
-                    
                     const valImovel = colImovel ? String(linha[colImovel] || '').toUpperCase().trim() : '';
                     const valOrdem = colOrdem ? String(linha[colOrdem] || '').toUpperCase().trim() : '';
                     return valImovel === 'TOTAL' || valImovel.startsWith('TOTAL ') || valImovel.startsWith('TOTAL:') || valOrdem === 'TOTAL';
                 });
 
-                let dados = dadosValidos.filter(linha => linha !== linhaTotal);
+                let dados = dadosImoveis.filter(linha => linha !== linhaTotalImoveis);
 
-                if (dados.length > 0) {
+                if (dadosValidos.length > 0) {
                     const menuLateral = document.getElementById('menu-lateral');
                     const conteinerSecoes = document.getElementById('conteiner-secoes');
 
@@ -266,7 +341,6 @@
                         }
                     }
 
-                    const colunaStatusOriginal = getCol(['STATUS']);
                     const colunaPagamentoOriginal = todasColunas.find(c => {
                         let cn = normalizeStr(c);
                         return cn.includes('PAGAMENTO') && !cn.includes('ESTIMATIVA') && !cn.includes('VALOR');
@@ -298,41 +372,31 @@
                         let n = normalizeStr(c);
                         return n.includes('ESTIMATIVA') || n.includes('AVALIACAO');
                     });
-                    
-                    dados.forEach(linha => {
-                        let vStatus = colArrematados ? String(linha[colArrematados] || '').trim().toLowerCase() : '';
-                        let temLote = colLote && linha[colLote] && String(linha[colLote]).trim() !== '-' && String(linha[colLote]).trim() !== '';
-                        let temArrematante = colArrematante && linha[colArrematante] && String(linha[colArrematante]).trim() !== '-' && String(linha[colArrematante]).trim() !== '';
-                        let temLocal = colLocal && linha[colLocal] && String(linha[colLocal]).trim() !== '-' && String(linha[colLocal]).trim() !== '';
-                        let temValorPuro = colValorPuro && linha[colValorPuro] && String(linha[colValorPuro]).trim() !== '-' && String(linha[colValorPuro]).trim() !== '';
 
-                        let temV = vStatus === 'v' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus) || vStatus === 'sim';
-                        
-                        let vValorAntigo = colValorArremateAntigo ? String(linha[colValorArremateAntigo] || '').trim() : '';
-                        let temValorAntigo = false;
-                        if (vValorAntigo !== '' && vValorAntigo !== '-') {
-                            if (window.parseDinheiro(vValorAntigo) > 0) temValorAntigo = true;
-                        }
+                    // Calculate totals for Arrematados
+                    dadosArrematadosRaw.forEach(linha => {
+                        let arrematanteVal = colArrematante ? String(linha[colArrematante] || '').trim() : '';
+                        let imovelVal = colImovelPrincipal ? String(linha[colImovelPrincipal] || '').trim() : '';
+                        let isTotalRow = normalizeStr(arrematanteVal).startsWith('TOTAL') || normalizeStr(imovelVal).startsWith('TOTAL');
 
-                        let isArrematadoValido = false;
-
-                        if (temV || temValorAntigo || temArrematante || temLote || temLocal || temValorPuro) {
+                        if (!isTotalRow) {
                             let vValorFinal = (colValorPuro && linha[colValorPuro]) ? linha[colValorPuro] : (colValorArremateAntigo ? linha[colValorArremateAntigo] : null);
                             let numValor = window.parseDinheiro(vValorFinal);
-                            
                             let vDataFinal = (colDataAdj && linha[colDataAdj]) ? linha[colDataAdj] : (colDataAntiga ? linha[colDataAntiga] : null);
                             let strDate = String(vDataFinal || '').trim();
-                            
+
                             if (numValor > 0) {
-                                isArrematadoValido = true;
                                 sumTotal += numValor;
                                 countTotal++;
                                 if (strDate.includes('2025')) { sum2025 += numValor; count2025++; }
-                                if (strDate.includes('2026')) { sum2026 += numValor; count2026++; }
+                                else if (strDate.includes('2026')) { sum2026 += numValor; count2026++; }
+                                else { sum2026 += numValor; count2026++; }
                             }
                         }
+                    });
 
-                        if (!isArrematadoValido && colEstimativaGeral) {
+                    dados.forEach(linha => {
+                        if (colEstimativaGeral) {
                             let valEst = window.parseDinheiro(linha[colEstimativaGeral]);
                             if (valEst > 0) {
                                 sumEstimativa += valEst;
@@ -366,7 +430,7 @@
                                 <div class="card p-5 border-l-4 border-indigo-500 shadow-sm flex flex-col justify-center bg-indigo-50/30">
                                     <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate" title="Total Arrematado 2025 e 2026">Total Arrematado 2025 e 2026</p>
                                     <h3 class="text-lg lg:text-xl font-black text-navy mt-1">${fmtCur.format(sum2025 + sum2026)}</h3>
-                                    <p class="text-[11px] font-bold text-indigo-400 mt-1"><i class="fa-solid fa-calendar-check mr-1"></i> ${count2025 + count2026} lote(s)</p>
+                                    <p class="text-[11px] font-bold text-indigo-400 mt-1"><i class="fa-solid fa-calendar-check mr-1"></i> ${countTotal > 0 ? countTotal : (count2025 + count2026)} lote(s)</p>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-1 max-w-md mx-auto gap-4 mb-8">
@@ -379,14 +443,14 @@
 
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
                                 <div class="card p-6 flex flex-col items-center justify-center shadow-sm">
-                                    <h4 class="font-black text-navy text-sm mb-4 uppercase tracking-widest border-b-2 border-gray-100 pb-2 w-full text-center">Evolução Financeira</h4>
-                                    <div class="h-64 w-full relative">
+                                    <h4 class="font-black text-navy text-xs mb-4 uppercase tracking-widest border-b-2 border-gray-100 pb-2 w-full text-center">Evolução Financeira</h4>
+                                    <div class="chart-container">
                                         <canvas id="chart-visao-valores"></canvas>
                                     </div>
                                 </div>
                                 <div class="card p-6 flex flex-col items-center justify-center shadow-sm">
-                                    <h4 class="font-black text-navy text-sm mb-4 uppercase tracking-widest border-b-2 border-gray-100 pb-2 w-full text-center">Distribuição de Lotes</h4>
-                                    <div class="h-64 w-full relative">
+                                    <h4 class="font-black text-navy text-xs mb-4 uppercase tracking-widest border-b-2 border-gray-100 pb-2 w-full text-center">Distribuição de Lotes</h4>
+                                    <div class="chart-container">
                                         <canvas id="chart-visao-lotes"></canvas>
                                     </div>
                                 </div>
@@ -519,6 +583,14 @@
 
                         conteinerSecoes.innerHTML += `
                             <section id="${idSecaoSetorAtual}" class="section-content">
+                                <!-- Section Introductory Explanation -->
+                                <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
+                                    <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
+                                    <p class="text-xs text-slate-600 leading-relaxed">
+                                        Acompanhe o fluxo operacional e a tramitação de cada imóvel entre os órgãos municipais (Casa Civil, Obras, Licitações e Jurídico). Esta matriz interativa destaca gargalos administrativos e o estágio atual de regularização e disponibilização de cada lote.
+                                    </p>
+                                </div>
+
                                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
                                     ${cardsHtml}
                                 </div>
@@ -538,8 +610,8 @@
                                     </div>
 
                                     <div class="card p-8 flex flex-col items-center justify-center border-t-4 border-gold shadow-md">
-                                        <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gray-100 pb-2 text-center w-full">Distribuição Atual do Portfólio</h4>
-                                        <div class="h-80 w-full relative max-w-2xl mx-auto">
+                                        <h4 class="font-black text-navy text-xs mb-6 uppercase tracking-widest border-b-2 border-gray-100 pb-2 text-center w-full">Distribuição Atual do Portfólio</h4>
+                                        <div class="chart-container">
                                             <canvas id="chart-setor-atual"></canvas>
                                         </div>
                                     </div>
@@ -752,20 +824,20 @@
                             `;
                         });
 
-                        if (isEstimativaTab && linhaTotal) {
-                            let valorTotalColuna = escapeHTML(linhaTotal[coluna] || '-');
+                        if (isEstimativaTab && linhaTotalImoveis) {
+                            let valorTotalColuna = escapeHTML(linhaTotalImoveis[coluna] || '-');
                             if (isEstimativaTab || coluna.toUpperCase().includes('VALOR') || coluna.toUpperCase().includes('R$')) {
-                                let numValorT = window.parseDinheiro(linhaTotal[coluna]);
-                                if (linhaTotal[coluna] && String(linhaTotal[coluna]).trim() !== '') {
+                                let numValorT = window.parseDinheiro(linhaTotalImoveis[coluna]);
+                                if (linhaTotalImoveis[coluna] && String(linhaTotalImoveis[coluna]).trim() !== '') {
                                     valorTotalColuna = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValorT));
                                 }
                             }
-                            let pagTotalClean = escapeHTML(linhaTotal[colunaPagamentoOriginal] || '-');
+                            let pagTotalClean = escapeHTML(linhaTotalImoveis[colunaPagamentoOriginal] || '-');
                             let tdPagTotal = colunaPagamentoOriginal ? `<td class="p-4 text-left font-bold text-navy text-xs border-l border-blue-100 min-w-[250px] whitespace-normal">${pagTotalClean}</td>` : '';
                             
                             linhasTabela += `
-                                <tr class="bg-blue-50 border-t-2 border-blue-200 hover:bg-blue-100 transition-colors shadow-inner">
-                                    <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${escapeHTML(linhaTotal[colImovelPrincipal] || linhaTotal['IMÓVEL'] || 'TOTAL')}</td>
+                                <tr class="bg-blue-100 border-t-2 border-navy hover:bg-blue-200 transition-colors shadow-inner font-bold">
+                                    <td class="p-4 text-left font-black text-navy uppercase tracking-widest min-w-[350px]">${escapeHTML(linhaTotalImoveis[colImovelPrincipal] || linhaTotalImoveis['IMÓVEL'] || 'TOTAL')}</td>
                                     <td class="p-4 text-center font-black text-navy text-sm">${valorTotalColuna}</td>
                                     ${tdPagTotal}
                                 </tr>
@@ -862,15 +934,15 @@
                         if (isCoordenadasTab) {
                             blockInferior = `
                             <div class="card p-8 flex flex-col items-center justify-center shadow-md">
-                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Mapa de Imóveis (${escapeHTML(coluna)})</h4>
-                                <div id="map-${idSecao}" class="h-[600px] w-full rounded-xl border-4 border-gray-100 relative z-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]"></div>
+                                <h4 class="font-black text-navy text-xs mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Mapa de Imóveis (${escapeHTML(coluna)})</h4>
+                                <div id="map-${idSecao}" class="h-[550px] w-full rounded-xl border-4 border-gray-100 relative z-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]"></div>
                             </div>
                             `;
                         } else if (!isStatusTab) {
                             blockInferior = `
                             <div class="card p-8 flex flex-col items-center justify-center shadow-md">
-                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${escapeHTML(coluna)}</h4>
-                                <div id="wrapper-chart-${idSecao}" class="h-80 w-full relative max-w-3xl mx-auto">
+                                <h4 class="font-black text-navy text-xs mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${escapeHTML(coluna)}</h4>
+                                <div id="wrapper-chart-${idSecao}" class="chart-container">
                                     <canvas id="chart-${idSecao}"></canvas>
                                 </div>
                             </div>
@@ -879,6 +951,14 @@
 
                         conteinerSecoes.innerHTML += `
                             <section id="${idSecao}" class="section-content">
+                                <!-- Section Introductory Explanation -->
+                                <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
+                                    <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
+                                    <p class="text-xs text-slate-600 leading-relaxed">
+                                        Visão detalhada focada no atributo <strong>${escapeHTML(coluna)}</strong> dos imóveis municipais. Utilização de filtros tabulares e representações gráficas/cartográficas para navegação ponto a ponto do patrimônio público.
+                                    </p>
+                                </div>
+
                                 ${cardsEstimativaHtml}
 
                                 <div class="flex flex-col gap-8">
@@ -901,171 +981,168 @@
                         `;
                     });
 
-                    if (colArrematados || colValorArremateAntigo || colLote || colArrematante || colLocal || colValorPuro || colDataAdj) {
-                        const idSecaoArrematados = 'secao-arrematados';
+                    // SECTION: LOTES ARREMATADOS (TRUNCATES AT TOTAL ROW & SHOWS TOTAL SUMMARY)
+                    const idSecaoArrematados = 'secao-arrematados';
 
-                        menuLateral.innerHTML += `
-                            <a href="#" onclick="showSection('${idSecaoArrematados}', this, 'Lotes Arrematados')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
-                                <i class="fa-solid fa-gavel w-6 text-center"></i>
-                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">Lotes Arrematados</span>
-                            </a>
-                        `;
+                    menuLateral.innerHTML += `
+                        <a href="#" onclick="showSection('${idSecaoArrematados}', this, 'Lotes Arrematados')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                            <i class="fa-solid fa-gavel w-6 text-center"></i>
+                            <span class="truncate text-[11px] font-bold tracking-wider uppercase">Lotes Arrematados</span>
+                        </a>
+                    `;
 
-                        const findCol = (keywords) => {
-                            return todasColunas.find(c => {
-                                let cn = normalizeStr(c);
-                                return keywords.some(kw => {
-                                    let kwn = normalizeStr(kw);
-                                    if (kwn.length <= 4) {
-                                        return cn === kwn || cn.startsWith(kwn + ' ') || cn.endsWith(' ' + kwn) || cn.includes(' ' + kwn + ' ');
-                                    }
-                                    return cn.includes(kwn);
-                                });
-                            });
-                        };
+                    let listaArrematados = [];
+                    let linhaTotalArrematados = null;
 
-                        const cArrematante = findCol(['ARREMATANTE', 'ARREMATANTES', 'COMPRADOR']) || colArrematante;
-                        const cLote = findCol(['LOTE', 'LOTES', 'NUMERO DO LOTE', 'N° LOTE', 'Nº LOTE']) || colLote;
-                        const cLocal = findCol(['LOCAL', 'LOCALIZACAO', 'ENDERECO']) || colLocal || colImovelPrincipal;
-                        const cValor = findCol(['VALOR ARREMATADO', 'VALOR ARREMATE', 'VALOR DE ARREMATE', 'VALOR ADJUDICADO', 'VALOR']) || colValorPuro || colValorArremateAntigo;
-                        const cData = findCol(['ADJUDICACAO', 'HOMOLOGACAO', 'DATA DE ADJUDICACAO', 'DATA DA HOMOLOGACAO', 'DATA']) || colDataAdj || colDataAntiga;
+                    // Parse Arrematados and stop immediately when reaching TOTAL line
+                    for (let i = 0; i < dadosArrematadosRaw.length; i++) {
+                        let linha = dadosArrematadosRaw[i];
+                        let arrematanteVal = colArrematante ? String(linha[colArrematante] || '').trim() : '';
+                        let imovelVal = colImovelPrincipal ? String(linha[colImovelPrincipal] || '').trim() : '';
+                        let loteVal = colLote ? String(linha[colLote] || '').trim() : '';
+                        let localVal = colLocal ? String(linha[colLocal] || '').trim() : '';
 
-                        const checkIsTotalRow = (linha) => {
-                            if (!linha) return false;
-                            if (linha === linhaTotal) return true;
-                            
-                            const keysToCheck = [cArrematante, cLocal, colImovelPrincipal, cLote, 'ORDEM', 'IMOVEL', 'IMÓVEL', 'LOCAL'];
-                            for (let key of keysToCheck) {
-                                if (key && linha[key]) {
-                                    let val = normalizeStr(linha[key]);
-                                    if (val === 'TOTAL' || val.startsWith('TOTAL ') || val.startsWith('TOTAL:') || val.startsWith('TOTAL -')) {
-                                        return true;
-                                    }
-                                }
-                            }
-                            return false;
-                        };
+                        let isTotalRow = normalizeStr(arrematanteVal).startsWith('TOTAL') || 
+                                         normalizeStr(imovelVal).startsWith('TOTAL') || 
+                                         normalizeStr(loteVal).startsWith('TOTAL') || 
+                                         normalizeStr(localVal).startsWith('TOTAL');
 
-                        let dadosParaArrematados = [];
+                        if (isTotalRow) {
+                            linhaTotalArrematados = linha;
+                            break; // Stop parsing lines beyond TOTAL in the spreadsheet tab
+                        } else {
+                            listaArrematados.push(linha);
+                        }
+                    }
 
-                        for (let i = 0; i < dadosValidos.length; i++) {
-                            let linha = dadosValidos[i];
-                            let isTot = checkIsTotalRow(linha);
+                    let linhasHtmlArrematados = '';
+                    let somaCalculadaArrematados = 0;
 
-                            let vArrematante = cArrematante && linha[cArrematante] ? String(linha[cArrematante]).trim() : '';
-                            let vLote = cLote && linha[cLote] ? String(linha[cLote]).trim() : '';
-                            let vLocal = cLocal && linha[cLocal] ? String(linha[cLocal]).trim() : '';
-                            let vValor = cValor && linha[cValor] ? String(linha[cValor]).trim() : '';
-                            let vData = cData && linha[cData] ? String(linha[cData]).trim() : '';
-                            let vStatus = colArrematados && linha[colArrematados] ? String(linha[colArrematados]).trim().toLowerCase() : '';
+                    listaArrematados.forEach((linha, i) => {
+                        let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
+                        
+                        let arrematanteTexto = colArrematante ? escapeHTML(linha[colArrematante] || '-') : '-';
+                        let loteTexto = colLote ? escapeHTML(linha[colLote] || '-') : '-';
+                        let localTexto = colLocal && linha[colLocal] ? escapeHTML(linha[colLocal]) : escapeHTML(linha[colImovelPrincipal] || linha['IMÓVEL'] || '-');
 
-                            let temArrematante = vArrematante !== '' && vArrematante !== '-';
-                            let temLote = vLote !== '' && vLote !== '-';
-                            let temLocal = vLocal !== '' && vLocal !== '-';
-                            let temValor = (vValor !== '' && vValor !== '-') && (window.parseDinheiro(vValor) > 0 || vValor.includes('R$') || /\d/.test(vValor));
-                            let temData = vData !== '' && vData !== '-';
-                            let temV = vStatus === 'v' || vStatus === 'sim' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus);
-
-                            if (temArrematante || temLote || temV || temValor || temData || temLocal || isTot) {
-                                dadosParaArrematados.push(linha);
-                                if (isTot) {
-                                    break;
-                                }
+                        let vValorFinal = (colValorPuro && linha[colValorPuro]) ? linha[colValorPuro] : (colValorArremateAntigo ? linha[colValorArremateAntigo] : null);
+                        let valorArremateTexto = '-';
+                        if (vValorFinal) {
+                            let numValor = window.parseDinheiro(vValorFinal);
+                            if (numValor > 0) {
+                                somaCalculadaArrematados += numValor;
+                                valorArremateTexto = escapeHTML(fmtCur.format(numValor));
                             }
                         }
 
-                        let linhasHtmlArrematados = '';
-
-                        dadosParaArrematados.forEach((linha, idx) => {
-                            let isRowTotal = checkIsTotalRow(linha);
-
-                            let arrematanteTexto = cArrematante && linha[cArrematante] ? escapeHTML(String(linha[cArrematante]).trim()) : '-';
-                            let loteTexto = cLote && linha[cLote] ? escapeHTML(String(linha[cLote]).trim()) : '-';
-                            
-                            let rawLocal = cLocal && linha[cLocal] ? String(linha[cLocal]).trim() : (colImovelPrincipal && linha[colImovelPrincipal] ? String(linha[colImovelPrincipal]).trim() : '-');
-                            let localTexto = escapeHTML(rawLocal).replace(/\r?\n/g, '<br>');
-
-                            let vValorFinal = cValor && linha[cValor] ? linha[cValor] : null;
-                            let valorArremateTexto = '-';
-                            if (vValorFinal && String(vValorFinal).trim() !== '' && String(vValorFinal).trim() !== '-') {
-                                let numValor = window.parseDinheiro(vValorFinal);
-                                if (numValor > 0) {
-                                    valorArremateTexto = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numValor));
-                                } else {
-                                    valorArremateTexto = escapeHTML(String(vValorFinal).trim());
-                                }
-                            }
-
-                            let dataTexto = '-';
-                            let vDataFinal = cData && linha[cData] ? linha[cData] : null;
-                            if (vDataFinal && String(vDataFinal).trim() !== '' && String(vDataFinal).trim() !== '-') {
-                                let strDate = String(vDataFinal).trim();
-                                if (strDate.includes('T') && strDate.match(/^\d{4}-\d{2}-\d{2}T/)) {
-                                    let partes = strDate.split('T')[0].split('-');
-                                    if (partes.length === 3) dataTexto = `${partes[2]}/${partes[1]}/${partes[0]}`;
-                                } else {
-                                    let primeiraParte = strDate.split(' ')[0];
-                                    if (primeiraParte.includes('/') || primeiraParte.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                                        dataTexto = escapeHTML(primeiraParte);
-                                    } else {
-                                        dataTexto = escapeHTML(strDate);
-                                    }
-                                }
-                            }
-
-                            let trClasses = '';
-                            if (isRowTotal) {
-                                trClasses = 'bg-blue-50 border-t-2 border-blue-200 font-bold hover:bg-blue-100 transition-colors shadow-inner';
-                                if (arrematanteTexto === '-' || arrematanteTexto === '') arrematanteTexto = 'TOTAL';
-                                if (loteTexto === '') loteTexto = '-';
-                                if (localTexto.toUpperCase().trim() === 'TOTAL' || localTexto.toUpperCase().trim().startsWith('TOTAL')) localTexto = '-';
+                        let dataTexto = '-';
+                        let vDataFinal = (colDataAdj && linha[colDataAdj]) ? linha[colDataAdj] : (colDataAntiga ? linha[colDataAntiga] : null);
+                        if (vDataFinal) {
+                            let strDate = String(vDataFinal).trim();
+                            if (strDate.includes('T') && strDate.match(/^\d{4}-\d{2}-\d{2}T/)) {
+                                let partes = strDate.split('T')[0].split('-');
+                                if (partes.length === 3) dataTexto = `${partes[2]}/${partes[1]}/${partes[0]}`;
                             } else {
-                                trClasses = `${idx % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
+                                let primeiraParte = strDate.split(' ')[0];
+                                if (primeiraParte.includes('/') || primeiraParte.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                    dataTexto = escapeHTML(primeiraParte);
+                                } else {
+                                    dataTexto = escapeHTML(strDate);
+                                }
                             }
-
-                            linhasHtmlArrematados += `
-                                <tr class="${trClasses}">
-                                    <td class="p-3 text-left font-bold text-navy whitespace-normal break-words">${arrematanteTexto}</td>
-                                    <td class="p-3 text-center text-gray-700 text-xs whitespace-normal break-words">${loteTexto}</td>
-                                    <td class="p-3 text-left text-gray-700 text-xs whitespace-normal break-words">${localTexto}</td>
-                                    <td class="p-3 text-center text-gray-700 text-xs font-semibold whitespace-normal">${valorArremateTexto}</td>
-                                    <td class="p-3 text-center text-gray-700 text-xs whitespace-normal">${dataTexto}</td>
-                                </tr>
-                            `;
-                        });
-
-                        if (dadosParaArrematados.length === 0) {
-                            let colunasInfo = escapeHTML(todasColunas.join(', '));
-                            linhasHtmlArrematados = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">
-                                Nenhum lote arrematado encontrado.<br>
-                                <span class="text-[9px] text-red-400 mt-3 block"><strong>Diagnóstico (Colunas detectadas):</strong> ${colunasInfo}</span>
-                            </td></tr>`;
                         }
 
-                        conteinerSecoes.innerHTML += `
-                            <section id="${idSecaoArrematados}" class="section-content">
-                                <div class="card overflow-hidden shadow-md bg-white w-full">
-                                    <div class="w-full">
-                                        <table class="w-full text-left text-xs border-collapse">
-                                            <thead class="uppercase text-[11px] bg-gray-200 text-black shadow-sm">
-                                                <tr>
-                                                    <th class="p-3 text-left border-r border-gray-300 w-[25%]">Arrematante</th>
-                                                    <th class="p-3 text-center border-r border-gray-300 w-[10%]">Lote</th>
-                                                    <th class="p-3 text-left border-r border-gray-300 w-[25%]">Local</th>
-                                                    <th class="p-3 text-center border-r border-gray-300 w-[15%]">Valor</th>
-                                                    <th class="p-3 text-center w-[25%]">Data de Adjudicação e Homologação</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="text-gray-800 font-medium">
-                                                ${linhasHtmlArrematados}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </section>
+                        linhasHtmlArrematados += `
+                            <tr class="${trClasses}">
+                                <td class="p-3 text-left font-bold text-navy whitespace-normal break-words">${arrematanteTexto}</td>
+                                <td class="p-3 text-center text-gray-700 text-xs whitespace-normal break-words">${loteTexto}</td>
+                                <td class="p-3 text-left text-gray-700 text-xs whitespace-normal break-words">${localTexto}</td>
+                                <td class="p-3 text-center text-gray-700 text-xs font-semibold whitespace-normal">${valorArremateTexto}</td>
+                                <td class="p-3 text-center text-gray-700 text-xs whitespace-normal">${dataTexto}</td>
+                            </tr>
+                        `;
+                    });
+
+                    // Render explicit TOTAL Summary Row at the bottom
+                    let trTotalArrematadosHtml = '';
+                    if (linhaTotalArrematados) {
+                        let arrematanteTotal = escapeHTML(colArrematante && linhaTotalArrematados[colArrematante] ? linhaTotalArrematados[colArrematante] : 'TOTAL');
+                        let loteTotal = escapeHTML(colLote && linhaTotalArrematados[colLote] ? linhaTotalArrematados[colLote] : `${listaArrematados.length} lote(s)`);
+                        let localTotal = escapeHTML(colLocal && linhaTotalArrematados[colLocal] ? linhaTotalArrematados[colLocal] : '-');
+                        
+                        let vValTotalRaw = (colValorPuro && linhaTotalArrematados[colValorPuro]) ? linhaTotalArrematados[colValorPuro] : (colValorArremateAntigo ? linhaTotalArrematados[colValorArremateAntigo] : null);
+                        let valorTotalStr = '-';
+                        if (vValTotalRaw && window.parseDinheiro(vValTotalRaw) > 0) {
+                            valorTotalStr = escapeHTML(fmtCur.format(window.parseDinheiro(vValTotalRaw)));
+                        } else if (somaCalculadaArrematados > 0) {
+                            valorTotalStr = escapeHTML(fmtCur.format(somaCalculadaArrematados));
+                        }
+
+                        let dataTotal = '-';
+                        let vDataTotal = (colDataAdj && linhaTotalArrematados[colDataAdj]) ? linhaTotalArrematados[colDataAdj] : (colDataAntiga ? linhaTotalArrematados[colDataAntiga] : null);
+                        if (vDataTotal && String(vDataTotal).trim() !== '-') dataTotal = escapeHTML(String(vDataTotal).trim());
+
+                        trTotalArrematadosHtml = `
+                            <tr class="bg-blue-100/90 border-t-2 border-navy font-black text-navy text-xs shadow-md">
+                                <td class="p-3.5 text-left uppercase tracking-wider">${arrematanteTotal}</td>
+                                <td class="p-3.5 text-center">${loteTotal}</td>
+                                <td class="p-3.5 text-left">${localTotal}</td>
+                                <td class="p-3.5 text-center text-sm font-black text-navy">${valorTotalStr}</td>
+                                <td class="p-3.5 text-center">${dataTotal}</td>
+                            </tr>
+                        `;
+                    } else if (listaArrematados.length > 0) {
+                        trTotalArrematadosHtml = `
+                            <tr class="bg-blue-100/90 border-t-2 border-navy font-black text-navy text-xs shadow-md">
+                                <td class="p-3.5 text-left uppercase tracking-wider">TOTAL</td>
+                                <td class="p-3.5 text-center">${listaArrematados.length} lote(s)</td>
+                                <td class="p-3.5 text-left">-</td>
+                                <td class="p-3.5 text-center text-sm font-black text-navy">${escapeHTML(fmtCur.format(somaCalculadaArrematados))}</td>
+                                <td class="p-3.5 text-center">-</td>
+                            </tr>
                         `;
                     }
 
+                    if (listaArrematados.length === 0) {
+                        linhasHtmlArrematados = `<tr><td colspan="5" class="p-6 text-center text-gray-500 italic">
+                            Nenhum lote arrematado encontrado na aba da planilha.
+                        </td></tr>`;
+                    } else {
+                        linhasHtmlArrematados += trTotalArrematadosHtml;
+                    }
+
+                    conteinerSecoes.innerHTML += `
+                        <section id="${idSecaoArrematados}" class="section-content">
+                            <!-- Section Introductory Explanation -->
+                            <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
+                                <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
+                                <p class="text-xs text-slate-600 leading-relaxed">
+                                    Registro consolidado de todos os lotes que já foram arrematados em leilões públicos. Apresenta o nome dos arrematantes, identificação dos lotes, valores finais homologados e datas de adjudicação.
+                                </p>
+                            </div>
+
+                            <div class="card overflow-hidden shadow-md bg-white w-full">
+                                <div class="w-full">
+                                    <table class="w-full text-left text-xs border-collapse">
+                                        <thead class="uppercase text-[11px] bg-gray-200 text-black shadow-sm">
+                                            <tr>
+                                                <th class="p-3 text-left border-r border-gray-300 w-[25%]">Arrematante</th>
+                                                <th class="p-3 text-center border-r border-gray-300 w-[10%]">Lote</th>
+                                                <th class="p-3 text-left border-r border-gray-300 w-[25%]">Local</th>
+                                                <th class="p-3 text-center border-r border-gray-300 w-[15%]">Valor</th>
+                                                <th class="p-3 text-center w-[25%]">Data de Adjudicação e Homologação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="text-gray-800 font-medium">
+                                            ${linhasHtmlArrematados}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </section>
+                    `;
+
+                    // SECTION: INVESTIMENTO
                     const colAno = todasColunas.find(c => normalizeStr(c) === 'ANO');
                     const colInvestimento = todasColunas.find(c => normalizeStr(c) === 'INVESTIMENTO REALIZADO' || normalizeStr(c) === 'INVESTIMENTO');
                     let colValorInv = todasColunas.find(c => normalizeStr(c) === 'VALOR');
@@ -1073,7 +1150,7 @@
                         colValorInv = todasColunas.find(c => normalizeStr(c).includes('VALOR') && !normalizeStr(c).includes('ARREMATADO'));
                     }
                     
-                    if (colInvestimento) {
+                    if (colInvestimento || dadosInvestimentoRaw.length > 0) {
                         const idSecaoInvestimento = 'secao-investimento';
 
                         menuLateral.innerHTML += `
@@ -1087,9 +1164,11 @@
                         let rows2025 = [];
                         let rows2026 = [];
 
-                        dados.forEach(linha => {
+                        let fonteInvestimento = dadosInvestimentoRaw.length > 0 ? dadosInvestimentoRaw : dadosValidos;
+
+                        fonteInvestimento.forEach(linha => {
                             let vAno = colAno ? String(linha[colAno] || '').trim() : '';
-                            let vInv = String(linha[colInvestimento] || '').trim();
+                            let vInv = colInvestimento ? String(linha[colInvestimento] || '').trim() : '';
                             let vVal = colValorInv ? String(linha[colValorInv] || '').trim() : '';
 
                             if (vInv === '-' || vInv === '') return;
@@ -1118,7 +1197,7 @@
                             cardsInvest.forEach(c => {
                                 let num = window.parseDinheiro(c.val);
                                 let valStr = c.val;
-                                if (num > 0 || c.val.includes('R$')) valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+                                if (num > 0 || c.val.includes('R$')) valStr = fmtCur.format(num);
                                 
                                 let bgClass = 'bg-white';
                                 let borderClass = 'border-amber-400';
@@ -1127,7 +1206,7 @@
                                 if (invLower.includes('saldo em conta')) {
                                     bgClass = 'bg-gray-100';
                                     borderClass = 'border-gray-500';
-                                } else if (invLower.includes('suplementação') || invLower.includes('suplementacao') || invLower.includes('disponível')) {
+                                } else if (invLower.includes('disponível para uso de suplementação') || invLower.includes('suplementação') || invLower.includes('suplementacao')) {
                                     bgClass = 'bg-green-100';
                                     borderClass = 'border-green-600';
                                 } else if (invLower.includes('saldo livre')) {
@@ -1150,7 +1229,7 @@
                             let html = `
                                 <div class="card overflow-hidden shadow-md bg-white w-full h-full flex flex-col">
                                     <div class="p-4 bg-gray-200 border-b border-gray-300">
-                                        <h4 class="font-bold text-navy uppercase text-sm tracking-widest text-center">${title}</h4>
+                                        <h4 class="font-bold text-navy uppercase text-xs tracking-widest text-center">${title}</h4>
                                     </div>
                                     <div class="w-full flex-grow overflow-x-auto custom-scrollbar">
                                         <table class="w-full text-left text-xs border-collapse min-w-[300px]">
@@ -1167,7 +1246,7 @@
                                 let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 hover:bg-gray-100 transition-colors`;
                                 let num = window.parseDinheiro(r.val);
                                 let valStr = r.val;
-                                if (num > 0 || r.val.includes('R$')) valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+                                if (num > 0 || r.val.includes('R$')) valStr = fmtCur.format(num);
 
                                 html += `
                                     <tr class="${trClasses}">
@@ -1196,6 +1275,14 @@
 
                         conteinerSecoes.innerHTML += `
                             <section id="${idSecaoInvestimento}" class="section-content">
+                                <!-- Section Introductory Explanation -->
+                                <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
+                                    <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
+                                    <p class="text-xs text-slate-600 leading-relaxed">
+                                        Visão panorâmica da aplicação dos recursos arrecadados e saldos disponíveis em conta para suplementação orçamentária e obras municipais nos exercícios de 2025 e 2026.
+                                    </p>
+                                </div>
+
                                 ${cardsHtmlInv}
                                 ${gridsHtml}
                             </section>
@@ -1206,9 +1293,10 @@
                     if (primeiroLink) { primeiroLink.click(); }
 
                     if (usandoMock) {
-                        document.getElementById('page-title').innerHTML += ' <span class="text-[10px] bg-red-500 text-white px-2 py-1 rounded ml-2 align-middle" title="Erro de rede/CORS. Exibindo dados de teste.">MODO DEMO</span>';
+                        document.getElementById('page-title').innerHTML += ' <span class="text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded ml-2 align-middle font-bold" title="Usando base local demonstrativa">MODO DEMO</span>';
                     }
 
+                    // Render Overview Charts
                     const canvasVisaoValores = document.getElementById('chart-visao-valores');
                     const canvasVisaoLotes = document.getElementById('chart-visao-lotes');
 
@@ -1239,12 +1327,12 @@
                                     legend: { display: false },
                                     tooltip: {
                                         backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
-                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
-                                        padding: 12, cornerRadius: 8,
+                                        titleFont: { family: "'Poppins', sans-serif", size: 12, weight: 'bold' },
+                                        bodyFont: { family: "'Poppins', sans-serif", size: 11 },
+                                        padding: 10, cornerRadius: 8,
                                         callbacks: {
                                             label: function(context) {
-                                                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
+                                                return fmtCur.format(context.raw);
                                             }
                                         }
                                     }
@@ -1283,16 +1371,16 @@
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 plugins: {
-                                    legend: { position: 'bottom', labels: { font: { family: "'Poppins', sans-serif", size: 11 }, boxWidth: 12, padding: 15 } },
+                                    legend: { position: 'bottom', labels: { font: { family: "'Poppins', sans-serif", size: 11 }, boxWidth: 12, padding: 12 } },
                                     tooltip: {
                                         backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
-                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
-                                        padding: 12, cornerRadius: 8,
+                                        titleFont: { family: "'Poppins', sans-serif", size: 12, weight: 'bold' },
+                                        bodyFont: { family: "'Poppins', sans-serif", size: 11 },
+                                        padding: 10, cornerRadius: 8,
                                         callbacks: {
                                             label: function(context) {
                                                 const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                const porcentagem = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
                                                 return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
                                             }
                                         }
@@ -1330,17 +1418,17 @@
                                     legend: {
                                         display: labelsSetorAtual.length <= 20,
                                         position: 'right',
-                                        labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
+                                        labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 8 }
                                     },
                                     tooltip: {
                                         backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                        titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
-                                        bodyFont: { family: "'Poppins', sans-serif", size: 12 },
-                                        padding: 12, cornerRadius: 8, displayColors: true,
+                                        titleFont: { family: "'Poppins', sans-serif", size: 12, weight: 'bold' },
+                                        bodyFont: { family: "'Poppins', sans-serif", size: 11 },
+                                        padding: 10, cornerRadius: 8, displayColors: true,
                                         callbacks: {
                                             label: function(context) {
                                                 const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                const porcentagem = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
                                                 return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
                                             }
                                         }
@@ -1479,9 +1567,9 @@
                                 
                                 if (!isPizza && labels.length > 15 && labels.length >= (dados.length * 0.5)) {
                                     document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
-                                        <div class="flex items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
-                                            <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300 block"></i>
-                                            Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.
+                                        <div class="flex flex-col items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
+                                            <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300"></i>
+                                            <p>Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.</p>
                                         </div>
                                     `;
                                     return;
@@ -1516,21 +1604,20 @@
                                             legend: {
                                                 display: labels.length <= 20,
                                                 position: 'right',
-                                                labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 10 }
+                                                labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 8 }
                                             },
                                             tooltip: {
                                                 backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                                titleFont: { family: "'Poppins', sans-serif", size: 13, weight: 'bold' },
-                                                bodyFont: { family: "'Poppins', sans-serif", size: 12 },
-                                                padding: 12, cornerRadius: 8, displayColors: true,
+                                                titleFont: { family: "'Poppins', sans-serif", size: 12, weight: 'bold' },
+                                                bodyFont: { family: "'Poppins', sans-serif", size: 11 },
+                                                padding: 10, cornerRadius: 8, displayColors: true,
                                                 callbacks: {
                                                     title: function(tooltipItems) { return tooltipItems[0].label; },
                                                     label: function(context) {
                                                         const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                        const porcentagem = ((context.raw / total) * 100).toFixed(1);
+                                                        const porcentagem = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
                                                         if (isEstimativaTab) {
-                                                            const fmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
-                                                            return [`Valor Total: ${fmt}`, `Representa: ${porcentagem}%`];
+                                                            return [`Valor Total: ${fmtCur.format(context.raw)}`, `Representa: ${porcentagem}%`];
                                                         }
                                                         return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
                                                     }
@@ -1548,10 +1635,10 @@
             } catch (erro) {
                 console.error(erro);
                 document.getElementById('conteiner-secoes').innerHTML = `
-                    <div class="text-center p-10 card w-full">
+                    <div class="text-center p-10 card w-full max-w-lg mx-auto mt-10">
                         <i class="fa-solid fa-triangle-exclamation text-red-500 text-5xl mb-4"></i>
-                        <h2 class="text-xl font-bold text-navy">Erro de Acesso à Planilha</h2>
-                        <p class="text-gray-600 mt-2">Verifique a URL e as permissões do Apps Script no Google.</p>
+                        <h2 class="text-lg font-bold text-navy">Erro ao Carregar Dados da Planilha</h2>
+                        <p class="text-xs text-gray-600 mt-2">Não foi possível conectar ao Google Apps Script. Por favor, verifique as permissões de acesso da API ou tente novamente em instantes.</p>
                     </div>
                 `;
             }
