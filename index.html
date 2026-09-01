@@ -211,7 +211,7 @@
                         
                         { "_ABA": "Lotes Arrematados", "ARREMATANTE": "João Silva Empreendimentos", "LOTE": "01", "LOCAL": "Av. Aurora Forti Neves", "VALOR": "R$ 160.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "15/05/2026" },
                         { "_ABA": "Lotes Arrematados", "ARREMATANTE": "Construtora Olímpia Ltda", "LOTE": "02", "LOCAL": "Rua São João, 450", "VALOR": "R$ 320.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "20/06/2026" },
-                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "TOTAL", "LOTE": "2 lotes", "LOCAL": "-", "VALOR": "R$ 480.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "-" },
+                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "TOTAL", "LOTE": "-", "LOCAL": "-", "VALOR": "R$ 480.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "-" },
 
                         { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Saldo em conta", "VALOR": "R$ 500.000,00" },
                         { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Disponível para uso de suplementação", "VALOR": "R$ 200.000,00" },
@@ -1059,11 +1059,11 @@
                         `;
                     });
 
-                    // Render explicit TOTAL Summary Row at the bottom
+                    // Render explicit TOTAL Summary Row at the bottom with '-' for Lote column
                     let trTotalArrematadosHtml = '';
                     if (linhaTotalArrematados) {
                         let arrematanteTotal = escapeHTML(colArrematante && linhaTotalArrematados[colArrematante] ? linhaTotalArrematados[colArrematante] : 'TOTAL');
-                        let loteTotal = escapeHTML(colLote && linhaTotalArrematados[colLote] ? linhaTotalArrematados[colLote] : `${listaArrematados.length} lote(s)`);
+                        let loteTotal = '-';
                         let localTotal = escapeHTML(colLocal && linhaTotalArrematados[colLocal] ? linhaTotalArrematados[colLocal] : '-');
                         
                         let vValTotalRaw = (colValorPuro && linhaTotalArrematados[colValorPuro]) ? linhaTotalArrematados[colValorPuro] : (colValorArremateAntigo ? linhaTotalArrematados[colValorArremateAntigo] : null);
@@ -1091,7 +1091,7 @@
                         trTotalArrematadosHtml = `
                             <tr class="bg-blue-100/90 border-t-2 border-navy font-black text-navy text-xs shadow-md">
                                 <td class="p-3.5 text-left uppercase tracking-wider">TOTAL</td>
-                                <td class="p-3.5 text-center">${listaArrematados.length} lote(s)</td>
+                                <td class="p-3.5 text-center">-</td>
                                 <td class="p-3.5 text-left">-</td>
                                 <td class="p-3.5 text-center text-sm font-black text-navy">${escapeHTML(fmtCur.format(somaCalculadaArrematados))}</td>
                                 <td class="p-3.5 text-center">-</td>
