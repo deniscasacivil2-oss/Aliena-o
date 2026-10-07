@@ -42,7 +42,6 @@
         .modern-map-popup .leaflet-popup-content { margin: 8px 14px; }
         .custom-marker { background: transparent; border: none; }
         
-        /* Chart container constraint specification */
         .chart-container {
             position: relative;
             width: 100%;
@@ -59,12 +58,11 @@
 </head>
 <body class="flex min-h-screen">
 
-    <!-- Sidebar Navigation -->
     <aside id="sidebar" class="sidebar text-white flex-shrink-0 flex flex-col transition-all duration-300 w-64 overflow-hidden h-screen sticky top-0 z-50">
         <div class="sidebar-content flex flex-col h-full">
             <div class="p-6 text-center border-b border-blue-900">
                 <div class="bg-white p-2 rounded-lg mb-3 inline-block logo-container shadow-lg">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/30/Bras%C3%A3o_de_Ol%C3%ADmpia%2C_SP.jpg" alt="Brasão de Olímpia" class="h-14 mx-auto">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/30/Bras%C3%A3o_de_Ol%C3%ADmpia%2C_SP.jpg" alt="Brasão de Olímpia" class="h-14 mx-auto" onerror="this.src='https://placehold.co/100x100/ffffff/003366?text=OP'">
                 </div>
                 <h2 class="text-[11px] font-bold tracking-widest uppercase text-blue-100 leading-tight px-1">Alienação de Imóveis Públicos</h2>
                 <p class="text-[9px] text-amber-300 uppercase tracking-wider mt-1">Gestão de Patrimônio</p>
@@ -78,13 +76,12 @@
             </nav>
 
             <div class="p-5 bg-blue-950 text-[10px] text-blue-300 mt-auto border-t border-blue-900">
-                <p class="font-bold text-white mb-0.5">Divisão de Governança, Processo e Projetos Estratégicos</p>
+                <p class="font-bold text-white mb-0.5">Divisão de Governança, Processos e Projetos Estratégicos</p>
                 <p>Casa Civil | Município de Olímpia - SP</p>
             </div>
         </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="flex-grow flex flex-col min-w-0 w-full">
         <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 md:px-8 sticky top-0 z-40 shadow-sm">
             <div class="flex items-center space-x-4">
@@ -100,15 +97,33 @@
         </header>
 
         <div id="conteiner-secoes" class="p-4 md:p-8 w-full mx-auto max-w-[1400px]">
-            <div class="flex flex-col items-center justify-center h-64 text-navy mt-16">
+            <div class="flex flex-col items-center justify-center h-64 text-navy mt-20">
                 <i class="fa-solid fa-spinner fa-spin text-5xl mb-4 text-gold"></i>
-                <h2 class="text-lg font-bold uppercase tracking-widest">Sincronizando Dados Municipais</h2>
-                <p class="text-xs text-gray-500 mt-1">Carregando registros de patrimônio e leilões...</p>
+                <h2 class="text-xl font-bold uppercase tracking-widest">Sincronizando Dados</h2>
+                <p class="text-sm text-gray-500 mt-2">Construindo painéis a partir da nuvem...</p>
             </div>
         </div>
     </main>
 
+    <div id="modal-mapa" class="fixed inset-0 bg-navy/80 z-[100] hidden items-center justify-center p-4 md:p-8 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-300 relative">
+            <div class="bg-navy p-5 flex justify-between items-center text-white z-10 shadow-md">
+                <h3 class="font-bold uppercase tracking-widest text-sm flex items-center"><i class="fa-solid fa-map-location-dot text-gold mr-3 text-xl"></i> Localização do Patrimônio</h3>
+                <button onclick="fecharModalMapa()" class="text-gray-300 hover:text-white transition-colors focus:outline-none"><i class="fa-solid fa-xmark text-2xl"></i></button>
+            </div>
+            <div class="flex-grow relative bg-gray-200">
+                <div id="map-modal" class="absolute inset-0 z-0"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Previne erros de syntax ao injetar dados em atributos JS inline
+        function escapeJS(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
         function escapeHTML(str) {
             if (str === null || str === undefined) return '';
             return String(str).replace(/[&<>'"]/g, tag => ({
@@ -182,15 +197,52 @@
             return null;
         }
 
-        window.focarNoMapa = function(idSecao, lat, lng) {
-            if (window.appMaps && window.appMaps[idSecao]) {
-                const map = window.appMaps[idSecao];
-                map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
-                if (window.appMarkers && window.appMarkers[`${idSecao}_${lat}_${lng}`]) {
-                    setTimeout(() => { window.appMarkers[`${idSecao}_${lat}_${lng}`].openPopup(); }, 1500); 
-                }
+        window.abrirModalMapaGeral = function() {
+            window.shouldFitBounds = true;
+            abrirModalMapa();
+        };
+
+        window.abrirModalMapa = function() {
+            const modal = document.getElementById('modal-mapa');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.querySelector('.transform').classList.replace('scale-95', 'scale-100');
+                    if (window.modalMap) {
+                        window.modalMap.invalidateSize();
+                        if (window.modalMapBounds && window.shouldFitBounds) {
+                            window.modalMap.fitBounds(window.modalMapBounds, { padding: [50, 50] });
+                            window.shouldFitBounds = false;
+                        }
+                    }
+                }, 50);
             }
-        }
+        };
+
+        window.fecharModalMapa = function() {
+            const modal = document.getElementById('modal-mapa');
+            if (modal) {
+                modal.querySelector('.transform').classList.replace('scale-100', 'scale-95');
+                setTimeout(() => {
+                    modal.classList.remove('flex');
+                    modal.classList.add('hidden');
+                }, 300);
+            }
+        };
+
+        window.focarNoMapaModal = function(lat, lng) {
+            window.shouldFitBounds = false;
+            window.abrirModalMapa();
+            setTimeout(() => {
+                if (window.modalMap) {
+                    window.modalMap.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
+                    if (window.appMarkers && window.appMarkers[`modal_${lat}_${lng}`]) {
+                        setTimeout(() => { window.appMarkers[`modal_${lat}_${lng}`].openPopup(); }, 1500); 
+                    }
+                }
+            }, 300);
+        };
 
         async function carregarDados() {
             try {
@@ -241,7 +293,6 @@
                     return temInfo;
                 });
 
-                // Isolate rows by Tab (_ABA) if property exists
                 let dadosImoveis = [];
                 let dadosArrematadosRaw = [];
                 let dadosInvestimentoRaw = [];
@@ -259,7 +310,6 @@
                     }
                 });
 
-                // If no distinct 'ARREMATAD' tab in _ABA property, check imoveis rows
                 if (dadosArrematadosRaw.length === 0) {
                     dadosValidos.forEach(linha => {
                         let abaNorm = normalizeStr(linha['_ABA'] || linha['ABA'] || '');
@@ -283,7 +333,6 @@
                     });
                 }
 
-                // Extract Imóveis main TOTAL row if present
                 let linhaTotalImoveis = dadosImoveis.find(linha => {
                     let keys = Object.keys(linha);
                     let colImovel = keys.find(k => normalizeStr(k) === 'IMOVEL');
@@ -369,7 +418,7 @@
                         return n.includes('ESTIMATIVA') || n.includes('AVALIACAO');
                     });
 
-                    // Calculate totals for Arrematados
+                    // Calculating values...
                     dadosArrematadosRaw.forEach(linha => {
                         let arrematanteVal = colArrematante ? String(linha[colArrematante] || '').trim() : '';
                         let imovelVal = colImovelPrincipal ? String(linha[colImovelPrincipal] || '').trim() : '';
@@ -579,7 +628,6 @@
 
                         conteinerSecoes.innerHTML += `
                             <section id="${idSecaoSetorAtual}" class="section-content">
-                                <!-- Section Introductory Explanation -->
                                 <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
                                     <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
                                     <p class="text-xs text-slate-600 leading-relaxed">
@@ -625,6 +673,8 @@
                         if (cUpper === 'LOCAL' || cUpper === 'VALOR' || cUpper.includes('ADJUDICACAO') || cUpper.includes('HOMOLOGACAO')) return false;
                         if ((cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIACAO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
                         
+                        if (cUpper.includes('COORDENADA')) return false; // Aba Coordenadas foi desativada no menu a pedido
+
                         if (colDataAntiga && c === colDataAntiga) return false;
                         if (colArrematados && c === colArrematados) return false;
                         if (colValorArremateAntigo && c === colValorArremateAntigo) return false;
@@ -642,12 +692,9 @@
 
                         const isStatusTab = cNorm === 'STATUS'; 
                         const isEstimativaTab = cNorm.includes('ESTIMATIVA') || cNorm.includes('VALOR') || cNorm.includes('R$') || cNorm.includes('AVALIACAO');
-                        const isCoordenadasTab = cNorm.includes('COORDENADA');
-
-                        if (isCoordenadasTab) iconeClasse = 'fa-map-location-dot';
 
                         menuLateral.innerHTML += `
-                            <a href="#" onclick="showSection('${idSecao}', this, '${escapeHTML(coluna)}')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                            <a href="#" onclick="showSection('${idSecao}', this, '${escapeJS(escapeHTML(coluna))}')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
                                 <i class="fa-solid ${iconeClasse} w-6 text-center"></i>
                                 <span class="truncate text-[11px] font-bold tracking-wider uppercase">${escapeHTML(coluna)}</span>
                             </a>
@@ -661,6 +708,8 @@
                         let countAndamento = 0, valAndamento = 0;
                         let countConcluido = 0, valConcluido = 0;
                         let tabelaRowIdx = 0;
+
+                        const colCoordenada = getCol(['COORDENADA']);
 
                         dados.forEach((linha) => {
                             let imovelVal = linha[colImovelPrincipal] || linha['IMÓVEL'] || linha['IMOVEL'];
@@ -751,13 +800,6 @@
                                 valorColuna = `<span class="font-bold text-[10px] uppercase tracking-wider whitespace-normal inline-block ${corStatus}">${statusTexto}</span>`;
                             }
                             
-                            if (isCoordenadasTab) {
-                                let txtCoord = String(rawValorColuna).trim();
-                                if (txtCoord.length > 25 && txtCoord.startsWith('http')) {
-                                    valorColuna = `<a href="${escapeHTML(txtCoord)}" target="_blank" onclick="event.stopPropagation()" class="text-blue-600 hover:underline flex items-center gap-1"><i class="fa-solid fa-map-location-dot"></i> Ver no Google Maps</a>`;
-                                }
-                            }
-
                             let valorGrafico = String(linha[coluna] || 'Não Informado').trim();
                             if(valorGrafico.length > 35) valorGrafico = valorGrafico.substring(0, 35) + '...';
                             contagemGrafico[valorGrafico] = (contagemGrafico[valorGrafico] || 0) + 1;
@@ -773,9 +815,17 @@
                                 tdOrdemStatus = `<td class="p-3 text-center text-gray-800 font-bold text-xs border-r border-gray-100">${valOrdem}</td>`;
                                 let valMatricula = escapeHTML(colMatricula ? linha[colMatricula] : '-');
                                 let valArea = escapeHTML(colArea ? linha[colArea] : '-');
+                                
+                                let valCoordenadaRaw = colCoordenada ? String(linha[colCoordenada] || '').trim() : '-';
+                                let valCoordenadaHtml = escapeHTML(valCoordenadaRaw);
+                                if (valCoordenadaRaw.startsWith('http')) {
+                                    valCoordenadaHtml = `<a href="${escapeHTML(valCoordenadaRaw)}" target="_blank" onclick="event.stopPropagation()" class="text-blue-600 hover:underline flex items-center justify-center gap-1"><i class="fa-solid fa-map-location-dot"></i> Link</a>`;
+                                }
+
                                 colunasExtrasStatus = `
                                     <td class="p-3 text-left text-gray-700 text-xs whitespace-normal min-w-[100px]">${valMatricula}</td>
                                     <td class="p-3 text-center text-gray-700 text-xs whitespace-normal min-w-[80px]">${valArea}</td>
+                                    <td class="p-3 text-center text-gray-700 text-xs whitespace-normal min-w-[120px]">${valCoordenadaHtml}</td>
                                 `;
                             }
 
@@ -785,22 +835,16 @@
                                 tdPagamentoHtml = `<td class="p-3 text-left text-gray-700 text-xs border-l border-gray-100 min-w-[250px] whitespace-normal">${valPagamento}</td>`;
                             }
 
-                            let tdCadastroHtml = '';
-                            if (isCoordenadasTab && colunaCadastro) {
-                                let valCadastro = escapeHTML(linha[colunaCadastro] || '-');
-                                tdCadastroHtml = `<td class="p-3 text-left text-gray-700 text-xs border-r border-gray-100 min-w-[150px] whitespace-normal">${valCadastro}</td>`;
-                            }
-
                             let trClasses = `${tabelaRowIdx % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 transition-colors hover:bg-gray-100`;
                             tabelaRowIdx++;
                             let trOnClick = '';
 
-                            if (isCoordenadasTab) {
-                                let txtCoord = String(linha[coluna] || '').trim();
+                            if (isStatusTab && colCoordenada) {
+                                let txtCoord = String(linha[colCoordenada] || '').trim();
                                 let coords = window.parseCoordinates(txtCoord);
                                 if (coords && coords[0] >= -90 && coords[0] <= 90 && coords[1] >= -180 && coords[1] <= 180) {
                                     trClasses += ' cursor-pointer hover:!bg-blue-100 hover:shadow-md relative z-10';
-                                    trOnClick = `onclick="focarNoMapa('secao-${index}', ${coords[0]}, ${coords[1]})" title="Clique para localizar no mapa"`;
+                                    trOnClick = `onclick="focarNoMapaModal(${coords[0]}, ${coords[1]})" title="Clique para localizar no mapa"`;
                                 }
                             }
 
@@ -813,7 +857,6 @@
                                     ${tdOrdemStatus}
                                     <td class="${classesImovelTD}" title="${imovelLimpo}">${imovelLimpo}</td>
                                     ${colunasExtrasStatus}
-                                    ${tdCadastroHtml}
                                     <td class="p-3 ${valAlign} text-gray-700 text-xs">${valorColuna}</td>
                                     ${tdPagamentoHtml}
                                 </tr>
@@ -892,6 +935,7 @@
                                     <th class="p-3 text-left border-b border-gray-300 min-w-[180px]">Imóvel</th>
                                     <th class="p-3 text-left border-b border-gray-300 min-w-[100px]">Matrícula</th>
                                     <th class="p-3 text-center border-b border-gray-300 min-w-[80px]">Área</th>
+                                    <th class="p-3 text-center border-b border-gray-300 min-w-[120px]">Coordenada</th>
                                     <th class="p-3 text-left border-b border-gray-300 min-w-[150px]">Status</th>
                                 </tr>
                             `;
@@ -906,16 +950,6 @@
                                 </tr>
                             `;
                             theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
-                        } else if (isCoordenadasTab) {
-                            let thCadastro = colunaCadastro ? `<th class="p-3 text-left border-r border-gray-300 min-w-[150px]">${escapeHTML(colunaCadastro)}</th>` : '';
-                            headerTabelaHtml = `
-                                <tr>
-                                    <th class="p-3 text-left border-r border-gray-300 min-w-[350px]">Imóvel</th>
-                                    ${thCadastro}
-                                    <th class="p-3 ${headerAlignColuna} min-w-[200px]">${escapeHTML(coluna)}</th>
-                                </tr>
-                            `;
-                            theadClasses = 'uppercase text-[11px] bg-gray-200 text-black shadow-sm';
                         } else {
                             headerTabelaHtml = `
                                 <tr>
@@ -927,32 +961,41 @@
                         }
                         
                         let blockInferior = '';
-                        if (isCoordenadasTab) {
+                        if (!isStatusTab) {
                             blockInferior = `
                             <div class="card p-8 flex flex-col items-center justify-center shadow-md">
-                                <h4 class="font-black text-navy text-xs mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Mapa de Imóveis (${escapeHTML(coluna)})</h4>
-                                <div id="map-${idSecao}" class="h-[550px] w-full rounded-xl border-4 border-gray-100 relative z-0 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]"></div>
-                            </div>
-                            `;
-                        } else if (!isStatusTab) {
-                            blockInferior = `
-                            <div class="card p-8 flex flex-col items-center justify-center shadow-md">
-                                <h4 class="font-black text-navy text-xs mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${escapeHTML(coluna)}</h4>
-                                <div id="wrapper-chart-${idSecao}" class="chart-container">
+                                <h4 class="font-black text-navy text-sm mb-6 uppercase tracking-widest border-b-2 border-gold pb-2 w-full text-center">Gráfico: ${escapeHTML(coluna)}</h4>
+                                <div id="wrapper-chart-${idSecao}" class="h-80 w-full relative max-w-3xl mx-auto">
                                     <canvas id="chart-${idSecao}"></canvas>
                                 </div>
                             </div>
                             `;
                         }
 
+                        let botaoMapaHtml = '';
+                        if (isStatusTab) {
+                            botaoMapaHtml = `
+                                <button onclick="abrirModalMapaGeral()" class="card bg-navy text-gold p-4 flex flex-col items-center justify-center hover:bg-blue-900 transition-colors shadow-md border-2 border-gold cursor-pointer w-full md:w-48 group shrink-0">
+                                    <i class="fa-solid fa-map-location-dot text-2xl mb-1 group-hover:scale-110 transition-transform"></i>
+                                    <span class="font-black uppercase tracking-widest text-[10px]">Abrir Mapa</span>
+                                </button>
+                            `;
+                        }
+
+                        let descContexto = isStatusTab 
+                            ? "Painel centralizado com o estágio atual de tramitação e regularização de todos os imóveis. Selecione um imóvel listado para ser redirecionado para a localização via mapa." 
+                            : `Visão detalhada focada no atributo <strong>${escapeHTML(coluna)}</strong> dos imóveis municipais.`;
+
                         conteinerSecoes.innerHTML += `
                             <section id="${idSecao}" class="section-content">
-                                <!-- Section Introductory Explanation -->
-                                <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
-                                    <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
-                                    <p class="text-xs text-slate-600 leading-relaxed">
-                                        Visão detalhada focada no atributo <strong>${escapeHTML(coluna)}</strong> dos imóveis municipais. Utilização de filtros tabulares e representações gráficas/cartográficas para navegação ponto a ponto do patrimônio público.
-                                    </p>
+                                <div class="flex flex-col md:flex-row gap-4 mb-6">
+                                    <div class="card p-5 border-l-4 border-navy bg-blue-50/40 flex-1">
+                                        <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
+                                        <p class="text-xs text-slate-600 leading-relaxed">
+                                            ${descContexto}
+                                        </p>
+                                    </div>
+                                    ${botaoMapaHtml}
                                 </div>
 
                                 ${cardsEstimativaHtml}
@@ -977,7 +1020,6 @@
                         `;
                     });
 
-                    // SECTION: LOTES ARREMATADOS (TRUNCATES AT TOTAL ROW & SHOWS TOTAL SUMMARY)
                     const idSecaoArrematados = 'secao-arrematados';
 
                     menuLateral.innerHTML += `
@@ -990,7 +1032,6 @@
                     let listaArrematados = [];
                     let linhaTotalArrematados = null;
 
-                    // Parse Arrematados and stop immediately when reaching TOTAL line
                     for (let i = 0; i < dadosArrematadosRaw.length; i++) {
                         let linha = dadosArrematadosRaw[i];
                         let arrematanteVal = colArrematante ? String(linha[colArrematante] || '').trim() : '';
@@ -1005,7 +1046,7 @@
 
                         if (isTotalRow) {
                             linhaTotalArrematados = linha;
-                            break; // Stop parsing lines beyond TOTAL in the spreadsheet tab
+                            break;
                         } else {
                             listaArrematados.push(linha);
                         }
@@ -1059,11 +1100,10 @@
                         `;
                     });
 
-                    // Render explicit TOTAL Summary Row at the bottom with '-' for Lote column
                     let trTotalArrematadosHtml = '';
                     if (linhaTotalArrematados) {
                         let arrematanteTotal = escapeHTML(colArrematante && linhaTotalArrematados[colArrematante] ? linhaTotalArrematados[colArrematante] : 'TOTAL');
-                        let loteTotal = '-';
+                        let loteTotal = '-'; 
                         let localTotal = escapeHTML(colLocal && linhaTotalArrematados[colLocal] ? linhaTotalArrematados[colLocal] : '-');
                         
                         let vValTotalRaw = (colValorPuro && linhaTotalArrematados[colValorPuro]) ? linhaTotalArrematados[colValorPuro] : (colValorArremateAntigo ? linhaTotalArrematados[colValorArremateAntigo] : null);
@@ -1109,7 +1149,6 @@
 
                     conteinerSecoes.innerHTML += `
                         <section id="${idSecaoArrematados}" class="section-content">
-                            <!-- Section Introductory Explanation -->
                             <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
                                 <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
                                 <p class="text-xs text-slate-600 leading-relaxed">
@@ -1138,7 +1177,6 @@
                         </section>
                     `;
 
-                    // SECTION: INVESTIMENTO
                     const colAno = todasColunas.find(c => normalizeStr(c) === 'ANO');
                     const colInvestimento = todasColunas.find(c => normalizeStr(c) === 'INVESTIMENTO REALIZADO' || normalizeStr(c) === 'INVESTIMENTO');
                     let colValorInv = todasColunas.find(c => normalizeStr(c) === 'VALOR');
@@ -1271,7 +1309,6 @@
 
                         conteinerSecoes.innerHTML += `
                             <section id="${idSecaoInvestimento}" class="section-content">
-                                <!-- Section Introductory Explanation -->
                                 <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
                                     <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
                                     <p class="text-xs text-slate-600 leading-relaxed">
@@ -1292,7 +1329,6 @@
                         document.getElementById('page-title').innerHTML += ' <span class="text-[9px] bg-amber-500 text-white px-2 py-0.5 rounded ml-2 align-middle font-bold" title="Usando base local demonstrativa">MODO DEMO</span>';
                     }
 
-                    // Render Overview Charts
                     const canvasVisaoValores = document.getElementById('chart-visao-valores');
                     const canvasVisaoLotes = document.getElementById('chart-visao-lotes');
 
@@ -1437,13 +1473,128 @@
                     colunasMenu.forEach((coluna, index) => {
                         const idSecao = 'secao-' + index;
                         const cNorm = normalizeStr(coluna);
-                        const isCoordenadasTab = cNorm.includes('COORDENADA');
 
-                        if (isCoordenadasTab) {
-                            const mapContainer = document.getElementById(`map-${idSecao}`);
-                            if (mapContainer) {
-                                window.appMaps = window.appMaps || {};
+                        const canvas = document.getElementById(`chart-${idSecao}`);
+                        if(canvas) {
+                            const isPizza = ['AREA', 'ESTIMATIVA', 'VALOR', 'R$', 'AVALIACAO', 'ALIENACAO', 'PERMUTA', 'DESAPROPRIACAO'].some(c => cNorm.includes(c));
+                            const isEstimativaTab = cNorm.includes('ESTIMATIVA') || cNorm.includes('VALOR') || cNorm.includes('R$') || cNorm.includes('AVALIACAO');
+                            
+                            let labels = [];
+                            let values = [];
+
+                            if (isEstimativaTab) {
+                                let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
                                 
+                                dados.forEach(d => {
+                                    let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
+                                    if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
+
+                                    let num = window.parseDinheiro(d[coluna]);
+                                    let isBlank = true, hasX = false, lastIsV = false;
+                                    for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
+                                        let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
+                                        if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
+                                            if (isBlank) {
+                                                if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
+                                            }
+                                            isBlank = false;
+                                            if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado') || valCell.startsWith('x ') || /^x[-]?\d/.test(valCell)) hasX = true;
+                                        }
+                                    }
+                                    if (isBlank) valPen += num;
+                                    else if (lastIsV) valCon += num;
+                                    else if (hasX) valAnd += num;
+                                    else valIniStrict += num;
+                                });
+
+                                if (valPen > 0) { labels.push('Pendente'); values.push(valPen); }
+                                if (valIniStrict > 0) { labels.push('Apenas Iniciado'); values.push(valIniStrict); }
+                                if (valAnd > 0) { labels.push('Em Andamento'); values.push(valAnd); }
+                                if (valCon > 0) { labels.push('Concluído'); values.push(valCon); }
+                            } else {
+                                const contagem = {};
+                                dados.forEach(d => {
+                                    let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
+                                    if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
+
+                                    let v = escapeHTML(String(d[coluna] || 'Não Informado').trim());
+                                    if(v.length > 35) v = v.substring(0, 35) + '...';
+                                    contagem[v] = (contagem[v] || 0) + 1;
+                                });
+                                labels = Object.keys(contagem);
+                                values = Object.values(contagem);
+                            }
+                            
+                            if (!isPizza && labels.length > 15 && labels.length >= (dados.length * 0.5)) {
+                                document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
+                                    <div class="flex flex-col items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
+                                        <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300"></i>
+                                        <p>Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.</p>
+                                    </div>
+                                `;
+                                return;
+                            }
+
+                            const gerarCores = (qtd) => {
+                                const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
+                                let cores = [];
+                                for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
+                                return cores;
+                            };
+
+                            let tipoGrafico = labels.length > 7 ? 'bar' : 'doughnut';
+                            if (isPizza) tipoGrafico = 'pie';
+                            
+                            new Chart(canvas.getContext('2d'), {
+                                type: tipoGrafico,
+                                data: {
+                                    labels: labels,
+                                    datasets: [{
+                                        label: 'Quantidade',
+                                        data: values,
+                                        backgroundColor: gerarCores(labels.length),
+                                        borderWidth: (tipoGrafico === 'bar' && labels.length > 7) ? 0 : 1,
+                                        borderColor: '#ffffff'
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            display: labels.length <= 20,
+                                            position: 'right',
+                                            labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 8 }
+                                        },
+                                        tooltip: {
+                                            backgroundColor: 'rgba(0, 51, 102, 0.95)',
+                                            titleFont: { family: "'Poppins', sans-serif", size: 12, weight: 'bold' },
+                                            bodyFont: { family: "'Poppins', sans-serif", size: 11 },
+                                            padding: 10, cornerRadius: 8, displayColors: true,
+                                            callbacks: {
+                                                title: function(tooltipItems) { return tooltipItems[0].label; },
+                                                label: function(context) {
+                                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                    const porcentagem = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
+                                                    if (isEstimativaTab) {
+                                                        return [`Valor Total: ${fmtCur.format(context.raw)}`, `Representa: ${porcentagem}%`];
+                                                    }
+                                                    return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: tipoGrafico === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { display: false } } : undefined
+                                }
+                            });
+                        }
+                    });
+
+                    const colCoordenadaModal = getCol(['COORDENADA']);
+                    if (colCoordenadaModal) {
+                        setTimeout(() => {
+                            const mapContainer = document.getElementById('map-modal');
+                            if (mapContainer && !window.modalMap) {
                                 const map = L.map(mapContainer).setView([-20.7383, -48.9133], 13);
                                 const mapaRuas = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
                                     maxZoom: 20,
@@ -1462,7 +1613,6 @@
 
                                 let bounds = L.latLngBounds();
                                 let hasValidMarkers = false;
-
                                 window.appMarkers = window.appMarkers || {};
 
                                 const customIcon = L.divIcon({
@@ -1477,7 +1627,7 @@
                                     let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
                                     if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
 
-                                    let coordStr = String(d[coluna] || '').trim();
+                                    let coordStr = String(d[colCoordenadaModal] || '').trim();
                                     let coords = window.parseCoordinates(coordStr);
 
                                     if (coords && coords.length === 2) {
@@ -1496,136 +1646,18 @@
                                                     offset: [0, -40],
                                                     opacity: 0.95
                                                 });
-                                            window.appMarkers[`${idSecao}_${lat}_${lng}`] = marker;
+                                            window.appMarkers[`modal_${lat}_${lng}`] = marker;
                                             bounds.extend([lat, lng]);
                                             hasValidMarkers = true;
                                         }
                                     }
                                 });
 
-                                if (hasValidMarkers) {
-                                    setTimeout(() => { map.fitBounds(bounds, { padding: [50, 50] }); }, 500);
-                                }
-                                window.appMaps[idSecao] = map;
+                                window.modalMap = map;
+                                window.modalMapBounds = hasValidMarkers ? bounds : null;
                             }
-                        } 
-                        else {
-                            const canvas = document.getElementById(`chart-${idSecao}`);
-                            if(canvas) {
-                                const isPizza = ['AREA', 'ESTIMATIVA', 'VALOR', 'R$', 'AVALIACAO', 'ALIENACAO', 'PERMUTA', 'DESAPROPRIACAO'].some(c => cNorm.includes(c));
-                                const isEstimativaTab = cNorm.includes('ESTIMATIVA') || cNorm.includes('VALOR') || cNorm.includes('R$') || cNorm.includes('AVALIACAO');
-                                
-                                let labels = [];
-                                let values = [];
-
-                                if (isEstimativaTab) {
-                                    let valPen = 0, valIniStrict = 0, valAnd = 0, valCon = 0;
-                                    
-                                    dados.forEach(d => {
-                                        let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
-                                        if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
-
-                                        let num = window.parseDinheiro(d[coluna]);
-                                        let isBlank = true, hasX = false, lastIsV = false;
-                                        for (let j = colunasReaisSetores.length - 1; j >= 0; j--) {
-                                            let valCell = String(d[colunasReaisSetores[j]] || '').trim().toLowerCase();
-                                            if (valCell !== '' && valCell !== '-' && valCell !== '.' && valCell !== 'n/a') {
-                                                if (isBlank) {
-                                                    if (valCell === 'v' || valCell === 'ok' || valCell === 'sim' || valCell.includes('concluí') || valCell.startsWith('v ') || /^v[-]?\d/.test(valCell)) lastIsV = true;
-                                                }
-                                                isBlank = false;
-                                                if (valCell === 'x' || valCell.includes('pendente') || valCell.includes('parado') || valCell.startsWith('x ') || /^x[-]?\d/.test(valCell)) hasX = true;
-                                            }
-                                        }
-                                        if (isBlank) valPen += num;
-                                        else if (lastIsV) valCon += num;
-                                        else if (hasX) valAnd += num;
-                                        else valIniStrict += num;
-                                    });
-
-                                    if (valPen > 0) { labels.push('Pendente'); values.push(valPen); }
-                                    if (valIniStrict > 0) { labels.push('Apenas Iniciado'); values.push(valIniStrict); }
-                                    if (valAnd > 0) { labels.push('Em Andamento'); values.push(valAnd); }
-                                    if (valCon > 0) { labels.push('Concluído'); values.push(valCon); }
-                                } else {
-                                    const contagem = {};
-                                    dados.forEach(d => {
-                                        let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
-                                        if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
-
-                                        let v = escapeHTML(String(d[coluna] || 'Não Informado').trim());
-                                        if(v.length > 35) v = v.substring(0, 35) + '...';
-                                        contagem[v] = (contagem[v] || 0) + 1;
-                                    });
-                                    labels = Object.keys(contagem);
-                                    values = Object.values(contagem);
-                                }
-                                
-                                if (!isPizza && labels.length > 15 && labels.length >= (dados.length * 0.5)) {
-                                    document.getElementById(`wrapper-chart-${idSecao}`).innerHTML = `
-                                        <div class="flex flex-col items-center justify-center h-full text-center text-gray-400 italic px-6 text-xs">
-                                            <i class="fa-solid fa-circle-info text-2xl mb-2 text-gray-300"></i>
-                                            <p>Esta métrica possui dados exclusivos para quase cada imóvel, tornando a exibição em gráfico inviável.</p>
-                                        </div>
-                                    `;
-                                    return;
-                                }
-
-                                const gerarCores = (qtd) => {
-                                    const paleta = ['#003366', '#ffb800', '#16a34a', '#dc2626', '#2563eb', '#9333ea', '#ea580c', '#14b8a6', '#f43f5e', '#8b5cf6'];
-                                    let cores = [];
-                                    for(let i=0; i<qtd; i++) cores.push(paleta[i % paleta.length]);
-                                    return cores;
-                                };
-
-                                let tipoGrafico = labels.length > 7 ? 'bar' : 'doughnut';
-                                if (isPizza) tipoGrafico = 'pie';
-                                
-                                new Chart(canvas.getContext('2d'), {
-                                    type: tipoGrafico,
-                                    data: {
-                                        labels: labels,
-                                        datasets: [{
-                                            label: 'Quantidade',
-                                            data: values,
-                                            backgroundColor: gerarCores(labels.length),
-                                            borderWidth: (tipoGrafico === 'bar' && labels.length > 7) ? 0 : 1,
-                                            borderColor: '#ffffff'
-                                        }]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: {
-                                                display: labels.length <= 20,
-                                                position: 'right',
-                                                labels: { font: { family: "'Poppins', sans-serif", size: 10 }, boxWidth: 12, padding: 8 }
-                                            },
-                                            tooltip: {
-                                                backgroundColor: 'rgba(0, 51, 102, 0.95)',
-                                                titleFont: { family: "'Poppins', sans-serif", size: 12, weight: 'bold' },
-                                                bodyFont: { family: "'Poppins', sans-serif", size: 11 },
-                                                padding: 10, cornerRadius: 8, displayColors: true,
-                                                callbacks: {
-                                                    title: function(tooltipItems) { return tooltipItems[0].label; },
-                                                    label: function(context) {
-                                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                        const porcentagem = total > 0 ? ((context.raw / total) * 100).toFixed(1) : 0;
-                                                        if (isEstimativaTab) {
-                                                            return [`Valor Total: ${fmtCur.format(context.raw)}`, `Representa: ${porcentagem}%`];
-                                                        }
-                                                        return [`Quantidade: ${context.raw} imóvel(is)`, `Representa: ${porcentagem}% do total`];
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        scales: tipoGrafico === 'bar' ? { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { display: false } } : undefined
-                                    }
-                                });
-                            }
-                        }
-                    });
+                        }, 500);
+                    }
 
                 }
             } catch (erro) {
