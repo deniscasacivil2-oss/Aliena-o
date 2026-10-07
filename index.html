@@ -138,7 +138,7 @@
                 </div>
 
                 <h4 class="font-bold text-navy uppercase tracking-widest text-xs mb-3 flex items-center">
-                    <i class="fa-solid fa-list-check text-gold mr-2"></i> Histórico de Detalhes e Parcelas
+                    <i class="fa-solid fa-list-check text-gold mr-2"></i> Histórico de Parcelas
                 </h4>
                 <div id="modal-pag-tabelas-container" class="flex flex-col gap-4">
                     <!-- Tabelas geradas via JS separadas por ano -->
@@ -226,40 +226,6 @@
             return null;
         };
 
-        window.focarNoMapa = function(idSecao, lat, lng) {
-            if (window.appMaps && window.appMaps[idSecao]) {
-                const map = window.appMaps[idSecao];
-                map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
-                if (window.appMarkers && window.appMarkers[`${idSecao}_${lat}_${lng}`]) {
-                    setTimeout(() => { window.appMarkers[`${idSecao}_${lat}_${lng}`].openPopup(); }, 1500); 
-                }
-            }
-        };
-
-        window.abrirModalMapaGeral = function() {
-            const modal = document.getElementById('modal-mapa');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => {
-                modal.querySelector('.transform').classList.replace('scale-95', 'scale-100');
-                if (window.modalMap) {
-                    window.modalMap.invalidateSize();
-                    if (window.modalMapBounds) {
-                        window.modalMap.fitBounds(window.modalMapBounds, { padding: [30, 30] });
-                    }
-                }
-            }, 50);
-        };
-
-        window.fecharModalMapa = function() {
-            const modal = document.getElementById('modal-mapa');
-            modal.querySelector('.transform').classList.replace('scale-100', 'scale-95');
-            setTimeout(() => {
-                modal.classList.remove('flex');
-                modal.classList.add('hidden');
-            }, 300);
-        };
-
         window.focarNoMapaModal = function(lat, lng) {
             window.abrirModalMapaGeral();
             setTimeout(() => {
@@ -280,45 +246,26 @@
             document.getElementById('modal-pag-nome').innerText = arrematanteId;
             document.getElementById('modal-pag-local').innerHTML = `<i class="fa-solid fa-map-pin mr-1 text-gold"></i> ${dados.local}`;
 
-            let cardsHtml = '';
-            window.colunasResumoPagamento.forEach(col => {
-                let valRaw = dados.resumo[col] || '-';
-                let valFormatado = valRaw;
-                let num = window.parseDinheiro(valRaw);
-                if (num > 0 || String(valRaw).includes('R$')) {
-                    valFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
-                }
-
-                let borderClass = 'border-blue-400';
-                let textClass = 'text-blue-600';
-                let bgClass = 'bg-blue-50';
-                let icon = 'fa-money-bill';
-
-                let norm = window.normalizeStr(col);
-                if (norm.includes('SALDO') || norm.includes('RESTANTE')) {
-                    borderClass = 'border-orange-400'; textClass = 'text-orange-600'; bgClass = 'bg-orange-50'; icon = 'fa-scale-unbalanced';
-                } else if (norm.includes('PAGO') || norm.includes('EFETUADO')) {
-                    borderClass = 'border-green-400'; textClass = 'text-green-600'; bgClass = 'bg-green-50'; icon = 'fa-check-double';
-                } else if (norm.includes('ARRECADADO') || norm.includes('ARREMATADO') || norm === 'TOTAL') {
-                    borderClass = 'border-navy'; textClass = 'text-navy'; bgClass = 'bg-gray-100'; icon = 'fa-sack-dollar';
-                }
-
-                cardsHtml += `
-                    <div class="card p-5 border-l-4 ${borderClass} shadow-sm bg-white">
-                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate mb-1"><i class="fa-solid ${icon} mr-1 opacity-70"></i> ${escapeHTML(col)}</p>
-                        <h3 class="text-xl font-black ${textClass} mt-1">${escapeHTML(valFormatado)}</h3>
-                    </div>
-                `;
+            let colData = window.colunasDetalhePagamento.find(c => window.normalizeStr(c).includes('DATA'));
+            let colValor = window.colunasDetalhePagamento.find(c => {
+                let n = window.normalizeStr(c);
+                return n.includes('VALOR') || n.includes('R$') || n.includes('PAGO') || n.includes('PAGAMENTO');
             });
             
-            if(window.colunasResumoPagamento.length === 0) {
-                cardsHtml = `<div class="col-span-full text-center p-4 bg-gray-50 text-gray-400 text-xs italic rounded-lg border border-gray-200">Nenhum totalizador consolidado encontrado para este arrematante na planilha.</div>`;
-            }
-            document.getElementById('modal-pag-cards').innerHTML = cardsHtml;
-
-            let colData = window.colunasDetalhePagamento.find(c => window.normalizeStr(c).includes('DATA'));
+            let colTotal = window.colunasDetalhePagamento.find(c => window.normalizeStr(c) === 'TOTAL' || window.normalizeStr(c) === 'TOTAL ARRECADADO');
+            let colSaldo = window.colunasDetalhePagamento.find(c => window.normalizeStr(c).includes('SALDO'));
             
+            // Remove as colunas totalizadoras da exibição visual na tabela de parcelas
+            let colunasParaTabela = window.colunasDetalhePagamento.filter(c => {
+                 let n = window.normalizeStr(c);
+                 return n !== 'TOTAL' && n !== 'TOTAL ARRECADADO' && !n.includes('SALDO');
+            });
+
+            let sum2025 = 0;
+            let sum2026 = 0;
+            let sumGeral = 0;
             let agrupadoPorAno = {};
+
             dados.detalhes.forEach(linha => {
                 let valDataRaw = colData ? linha[colData] : null;
                 let ano = "Sem Ano Especificado";
@@ -326,7 +273,6 @@
 
                 if (valDataRaw && String(valDataRaw).trim() !== '-') {
                     let str = String(valDataRaw).trim();
-                    // Processa datas estilo ISO (2026-08-15T...) ou americano (2026-08-15)
                     if (str.includes('T') && str.match(/^\d{4}-\d{2}-\d{2}T/)) {
                         let partes = str.split('T')[0].split('-');
                         ano = partes[0];
@@ -336,11 +282,9 @@
                         ano = partes[0];
                         dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
                     } else {
-                        // Tenta achar ano no texto caso venha fora do padrao
                         let matchAno = str.match(/\b(20\d{2})\b/);
                         if (matchAno) ano = matchAno[1];
                         
-                        // Fallback de formatacao dia/mes/ano ja vindo pre-pronto
                         if(str.match(/^\d{2}\/\d{2}\/\d{4}/)) {
                             dataFormatada = str.split(' ')[0];
                         } else {
@@ -351,16 +295,49 @@
                 
                 linha._dataFormatada = dataFormatada;
 
-                if (!agrupadoPorAno[ano]) agrupadoPorAno[ano] = [];
-                agrupadoPorAno[ano].push(linha);
+                let valNum = window.parseDinheiro(colValor ? linha[colValor] : 0);
+                
+                if (!agrupadoPorAno[ano]) agrupadoPorAno[ano] = { linhas: [], soma: 0, valTotalLote: 0, valSaldoRestante: 0 };
+                agrupadoPorAno[ano].linhas.push(linha);
+                agrupadoPorAno[ano].soma += valNum;
+
+                // Captura os valores de Total e Saldo para o rodapé do ano
+                if (colTotal && linha[colTotal] && String(linha[colTotal]).trim() !== '-' && String(linha[colTotal]).trim() !== '') {
+                     let numT = window.parseDinheiro(linha[colTotal]);
+                     if (numT > agrupadoPorAno[ano].valTotalLote) agrupadoPorAno[ano].valTotalLote = numT;
+                }
+                if (colSaldo && (linha[colSaldo] !== undefined) && String(linha[colSaldo]).trim() !== '-' && String(linha[colSaldo]).trim() !== '') {
+                     let numS = window.parseDinheiro(linha[colSaldo]);
+                     if (numS > agrupadoPorAno[ano].valSaldoRestante) agrupadoPorAno[ano].valSaldoRestante = numS;
+                }
+
+                sumGeral += valNum;
+                if (ano === '2025') sum2025 += valNum;
+                if (ano === '2026') sum2026 += valNum;
             });
+
+            const fmtCur = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            document.getElementById('modal-pag-cards').innerHTML = `
+                <div class="card p-5 border-l-4 border-gray-400 shadow-sm bg-white">
+                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"><i class="fa-solid fa-calendar mr-1 opacity-70"></i> TOTAL ARRECADADO 2025</p>
+                    <h3 class="text-xl font-black text-navy mt-1">${escapeHTML(fmtCur.format(sum2025))}</h3>
+                </div>
+                <div class="card p-5 border-l-4 border-blue-400 shadow-sm bg-white">
+                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"><i class="fa-solid fa-calendar mr-1 opacity-70"></i> TOTAL ARRECADADO 2026</p>
+                    <h3 class="text-xl font-black text-navy mt-1">${escapeHTML(fmtCur.format(sum2026))}</h3>
+                </div>
+                <div class="card p-5 border-l-4 border-navy shadow-sm bg-blue-50">
+                    <p class="text-[10px] font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-sack-dollar mr-1 opacity-70"></i> GERAL</p>
+                    <h3 class="text-xl font-black text-navy mt-1">${escapeHTML(fmtCur.format(sumGeral))}</h3>
+                </div>
+            `;
 
             let tabelasHtml = '';
             
             let theadTr = '<tr>';
-            window.colunasDetalhePagamento.forEach(col => {
+            colunasParaTabela.forEach(col => {
                 let nCol = window.normalizeStr(col);
-                // Força reconhecimento de colunas como Valor/Pagamento
                 let align = (nCol.includes('VALOR') || nCol.includes('R$') || nCol.includes('PAGO') || nCol.includes('PAGAMENTO')) ? 'text-center' : 'text-left';
                 theadTr += `<th class="p-3 ${align} border-r border-gray-200 min-w-[120px] uppercase text-[10px]">${escapeHTML(col)}</th>`;
             });
@@ -369,14 +346,14 @@
             let anosOrdenados = Object.keys(agrupadoPorAno).sort((a,b) => b.localeCompare(a));
 
             anosOrdenados.forEach(ano => {
-                let linhas = agrupadoPorAno[ano];
+                let grupo = agrupadoPorAno[ano];
                 let tbodyHtml = '';
                 
-                linhas.forEach((linha, i) => {
+                grupo.linhas.forEach((linha, i) => {
                     let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 hover:bg-blue-50 transition-colors`;
                     tbodyHtml += `<tr class="${trClasses}">`;
                     
-                    window.colunasDetalhePagamento.forEach(col => {
+                    colunasParaTabela.forEach(col => {
                         let nCol = window.normalizeStr(col);
                         let isDateCol = (col === colData);
                         let isCurrency = nCol.includes('VALOR') || nCol.includes('R$') || nCol.includes('PAGO') || nCol.includes('PAGAMENTO');
@@ -392,11 +369,7 @@
                                 content = escapeHTML(linha._dataFormatada);
                             } else if (isCurrency) {
                                 let num = window.parseDinheiro(valRaw);
-                                if (num > 0 || String(valRaw).includes('R$')) {
-                                    content = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num));
-                                } else {
-                                    content = escapeHTML(valRaw);
-                                }
+                                content = escapeHTML(fmtCur.format(num));
                             } else {
                                 content = escapeHTML(String(valRaw));
                             }
@@ -407,6 +380,54 @@
                     tbodyHtml += '</tr>';
                 });
                 
+                let colSpanFooter = colunasParaTabela.length > 1 ? colunasParaTabela.length - 1 : 1;
+
+                let rowTotalArrecadado = `
+                    <tr>
+                        <td colspan="${colSpanFooter}" class="p-3 text-right uppercase text-[10px] tracking-widest border-r border-blue-100 text-blue-800">TOTAL ARRECADADO</td>
+                        <td class="p-3 text-center text-xs whitespace-nowrap text-blue-900">${escapeHTML(fmtCur.format(grupo.soma))}</td>
+                    </tr>
+                `;
+
+                let rowTotal = '';
+                if (grupo.valTotalLote > 0 || (colTotal && dados.resumo[colTotal] && window.parseDinheiro(dados.resumo[colTotal]) > 0)) {
+                    let vT = grupo.valTotalLote > 0 ? grupo.valTotalLote : window.parseDinheiro(dados.resumo[colTotal]);
+                    rowTotal = `
+                        <tr class="bg-gray-100 border-t border-gray-200">
+                            <td colspan="${colSpanFooter}" class="p-3 text-right uppercase text-[10px] tracking-widest border-r border-gray-200 text-gray-600">TOTAL DO LOTE</td>
+                            <td class="p-3 text-center text-xs whitespace-nowrap text-gray-800">${escapeHTML(fmtCur.format(vT))}</td>
+                        </tr>
+                    `;
+                }
+
+                let rowSaldo = '';
+                let hasSaldo = false;
+                let valSaldo = 0;
+                
+                let nomeColSaldoEncontrada = colSaldo || window.colunasResumoPagamento.find(c => window.normalizeStr(c).includes('SALDO'));
+
+                if (grupo.valSaldoRestante > 0) {
+                     valSaldo = grupo.valSaldoRestante;
+                     hasSaldo = true;
+                } else if (nomeColSaldoEncontrada && dados.resumo[nomeColSaldoEncontrada] && String(dados.resumo[nomeColSaldoEncontrada]).trim() !== '-' && String(dados.resumo[nomeColSaldoEncontrada]).trim() !== '') {
+                     valSaldo = window.parseDinheiro(dados.resumo[nomeColSaldoEncontrada]);
+                     hasSaldo = true;
+                } else if (nomeColSaldoEncontrada) {
+                     hasSaldo = true;
+                }
+
+                if (hasSaldo) {
+                    let corSaldo = valSaldo > 0 ? 'text-orange-600' : 'text-green-600';
+                    let bgSaldo = valSaldo > 0 ? 'bg-orange-50' : 'bg-green-50';
+                    let borderSaldo = valSaldo > 0 ? 'border-orange-200' : 'border-green-200';
+                    rowSaldo = `
+                        <tr class="${bgSaldo} border-t ${borderSaldo}">
+                            <td colspan="${colSpanFooter}" class="p-3 text-right uppercase text-[10px] tracking-widest border-r ${borderSaldo} ${corSaldo}">SALDO RESTANTE</td>
+                            <td class="p-3 text-center text-xs font-black whitespace-nowrap ${corSaldo}">${escapeHTML(fmtCur.format(valSaldo))}</td>
+                        </tr>
+                    `;
+                }
+
                 tabelasHtml += `
                     <div class="card overflow-hidden shadow-sm bg-white border border-gray-200">
                         <div class="bg-gray-100 p-2 border-b border-gray-200">
@@ -420,6 +441,11 @@
                                 <tbody class="text-gray-800 font-medium">
                                     ${tbodyHtml}
                                 </tbody>
+                                <tfoot class="bg-blue-50 border-t-2 border-blue-200 font-bold shadow-inner">
+                                    ${rowTotalArrecadado}
+                                    ${rowTotal}
+                                    ${rowSaldo}
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -463,22 +489,17 @@
                     console.warn("Falha de rede ou restrição CORS. Utilizando base demonstrativa local.", fetchErro);
                     usandoMock = true;
                     const mockData = [
-                        { "_ABA": "Imóveis", "ORDEM": "1", "IMÓVEL": "Terreno Central - Av. Aurora Forti Neves", "MATRÍCULA": "12345", "ÁREA": "500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 150.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "v", "JURÍDIC": "v", "COORDENADA": "-20.7383, -48.9133", "CADASTRO MUNICIPAL": "11.22.33" },
-                        { "_ABA": "Imóveis", "ORDEM": "2", "IMÓVEL": "Prédio Comercial Antigo - Centro", "MATRÍCULA": "67890", "ÁREA": "1200 m²", "STATUS": "Pendente", "ESTIMATIVA": "R$ 850.000,00", "CASA CIVIL": "v", "OBRA": "x aguardando laudo", "LICITA": "-", "JURÍDIC": "-", "COORDENADA": "-20.7400, -48.9100", "CADASTRO MUNICIPAL": "44.55.66" },
-                        { "_ABA": "Imóveis", "ORDEM": "3", "IMÓVEL": "Área Industrial Leste - Lote 04", "MATRÍCULA": "99123", "ÁREA": "3500 m²", "STATUS": "Regular", "ESTIMATIVA": "R$ 1.200.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "Em andamento", "JURÍDIC": "v", "COORDENADA": "-20.7310, -48.8950", "CADASTRO MUNICIPAL": "77.88.99" },
+                        { "_ABA": "Imóveis", "ORDEM": "1", "IMÓVEL": "Terreno Central - Av. Aurora Forti Neves", "MATRÍCULA": "12345", "ÁREA": "500 m²", "COORDENADA": "-20.7383, -48.9133", "STATUS": "Regular", "ESTIMATIVA": "R$ 150.000,00", "CASA CIVIL": "v", "OBRA": "v", "LICITA": "v", "JURÍDIC": "v", "CADASTRO MUNICIPAL": "11.22.33" },
+                        { "_ABA": "Imóveis", "ORDEM": "2", "IMÓVEL": "Prédio Comercial Antigo - Centro", "MATRÍCULA": "67890", "ÁREA": "1200 m²", "COORDENADA": "http://maps.google.com/?q=-20.74,-48.91", "STATUS": "Pendente", "ESTIMATIVA": "R$ 850.000,00", "CASA CIVIL": "v", "OBRA": "x aguardando laudo", "LICITA": "-", "JURÍDIC": "-", "CADASTRO MUNICIPAL": "44.55.66" },
                         
                         { "_ABA": "Lotes Arrematados", "ARREMATANTE": "João Silva Empreendimentos", "LOTE": "01", "LOCAL": "Av. Aurora Forti Neves", "VALOR": "R$ 160.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "15/05/2026" },
-                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "Construtora Olímpia Ltda", "LOTE": "02", "LOCAL": "Rua São João, 450", "VALOR": "R$ 320.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "20/06/2026" },
-                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "TOTAL", "LOTE": "-", "LOCAL": "-", "VALOR": "R$ 480.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "-" },
+                        { "_ABA": "Lotes Arrematados", "ARREMATANTE": "TOTAL", "LOTE": "-", "LOCAL": "-", "VALOR": "R$ 160.000,00", "ADJUDICAÇÃO E HOMOLOGAÇÃO": "-" },
 
-                        { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Saldo em conta", "VALOR": "R$ 500.000,00" },
-                        { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Disponível para uso de suplementação", "VALOR": "R$ 200.000,00" },
-                        { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Saldo livre", "VALOR": "R$ 100.000,00" },
-                        { "_ABA": "Investimento", "ANO": "2025", "INVESTIMENTO REALIZADO": "Reforma Praça Central", "VALOR": "R$ 150.000,00" },
-                        { "_ABA": "Investimento", "ANO": "2026", "INVESTIMENTO REALIZADO": "Pavimentação Bairro Novo", "VALOR": "R$ 300.000,00" },
-                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "Maria Luiza Ltda", "DATA DE PAGAMENTO": "15/08/2026", "PARCELA": "1 de 3", "VALOR PAGO": "R$ 45.000,00" },
-                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "João Silva Empreendimentos", "DATA DE PAGAMENTO": "22/08/2026", "PARCELA": "Única", "VALOR PAGO": "R$ 160.000,00" },
-                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "TOTAL", "DATA DE PAGAMENTO": "-", "PARCELA": "-", "VALOR PAGO": "R$ 205.000,00" }
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "Maria Luiza Ltda", "DATA DE PAGAMENTO": "15/08/2025", "PARCELA": "1 de 3", "VALOR PAGO": "R$ 45.000,00" },
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "TOTAL ARRECADADO 2025:", "DATA DE PAGAMENTO": "-", "PARCELA": "-", "VALOR PAGO": "R$ 45.000,00" },
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "Maria Luiza Ltda", "DATA DE PAGAMENTO": "15/08/2026", "PARCELA": "2 de 3", "VALOR PAGO": "R$ 45.000,00" },
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "TOTAL ARRECADADO 2026:", "DATA DE PAGAMENTO": "-", "PARCELA": "-", "VALOR PAGO": "R$ 45.000,00" },
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "GERAL", "DATA DE PAGAMENTO": "-", "PARCELA": "-", "VALOR PAGO": "R$ 90.000,00" }
                     ];
                     textoResposta = JSON.stringify(mockData);
                 }
@@ -505,8 +526,6 @@
                 let dadosInvestimentoRaw = [];
                 let dadosPagamentosRaw = [];
 
-                let temPropAba = dadosValidos.some(l => l['_ABA'] || l['ABA']);
-
                 dadosValidos.forEach(linha => {
                     let abaNorm = normalizeStr(linha['_ABA'] || linha['ABA'] || '');
                     if (abaNorm.includes('ARREMATAD') || abaNorm.includes('LEILAO')) {
@@ -519,27 +538,6 @@
                         dadosImoveis.push(linha);
                     }
                 });
-
-                let linhaTotal = dadosValidos.find(linha => {
-                        let abaNorm = normalizeStr(linha['_ABA'] || linha['ABA'] || '');
-                        if (!abaNorm.includes('INVESTIMEN')) {
-                            let keys = Object.keys(linha);
-                            let colArrematados = keys.find(c => normalizeStr(c).includes('ARREMATAD'));
-                            let colArrematante = keys.find(c => normalizeStr(c).includes('ARREMATANTE'));
-                            let colLote = keys.find(c => normalizeStr(c) === 'LOTE');
-                            let colValorPuro = keys.find(c => normalizeStr(c) === 'VALOR');
-
-                            let vStatus = colArrematados ? String(linha[colArrematados] || '').trim().toLowerCase() : '';
-                            let temLote = colLote && linha[colLote] && String(linha[colLote]).trim() !== '-' && String(linha[colLote]).trim() !== '';
-                            let temArrematante = colArrematante && linha[colArrematante] && String(linha[colArrematante]).trim() !== '-' && String(linha[colArrematante]).trim() !== '';
-                            let temValorPuro = colValorPuro && linha[colValorPuro] && String(linha[colValorPuro]).trim() !== '-' && String(linha[colValorPuro]).trim() !== '';
-                            let temV = vStatus === 'v' || vStatus.startsWith('v ') || /^v[-]?\d/.test(vStatus) || vStatus === 'sim';
-
-                            if (temV || temArrematante || temLote || temValorPuro) {
-                                dadosArrematadosRaw.push(linha);
-                            }
-                        }
-                    });
 
                 let linhaTotalImoveis = dadosImoveis.find(linha => {
                     let keys = Object.keys(linha);
@@ -626,7 +624,6 @@
                         return n.includes('ESTIMATIVA') || n.includes('AVALIACAO');
                     });
 
-                    // Calculating values...
                     dadosArrematadosRaw.forEach(linha => {
                         let arrematanteVal = colArrematante ? String(linha[colArrematante] || '').trim() : '';
                         let imovelVal = colImovelPrincipal ? String(linha[colImovelPrincipal] || '').trim() : '';
@@ -880,18 +877,16 @@
                         if (cUpper === 'MATRICULA' || cUpper === 'AREA' || cUpper === 'ORDEM' || cUpper === 'CADASTRO MUNICIPAL' || cUpper === 'LOTE' || cUpper.includes('ARREMATANTE')) return false;
                         if (cUpper === 'LOCAL' || cUpper === 'VALOR' || cUpper.includes('ADJUDICACAO') || cUpper.includes('HOMOLOGACAO')) return false;
                         if ((cUpper.includes('ALIENACAO') || cUpper.includes('PERMUTA') || cUpper.includes('DESAPROPRIACAO')) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA')) return false;
-                        
-                        if (cUpper.includes('COORDENADA')) return false; // Aba Coordenadas foi desativada no menu a pedido
-
+                        if (cUpper.includes('COORDENADA')) return false; // Hide from standard processing
                         if (colDataAntiga && c === colDataAntiga) return false;
                         if (colArrematados && c === colArrematados) return false;
                         if (colValorArremateAntigo && c === colValorArremateAntigo) return false;
-
                         if (cUpper.includes('PAGAMENTO') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('VALOR')) return false;
                         return !chavesSetores.some(chave => cUpper.includes(chave) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('AVALIACAO'));
                     });
 
                     const icones = ['fa-hashtag', 'fa-ruler', 'fa-money-bill-wave', 'fa-file-signature', 'fa-map-pin', 'fa-traffic-light', 'fa-chart-pie'];
+                    const colCoordenada = getCol(['COORDENADA']);
 
                     colunasMenu.forEach((coluna, index) => {
                         const idSecao = 'secao-' + index;
@@ -916,8 +911,6 @@
                         let countAndamento = 0, valAndamento = 0;
                         let countConcluido = 0, valConcluido = 0;
                         let tabelaRowIdx = 0;
-
-                        const colCoordenada = getCol(['COORDENADA']);
 
                         dados.forEach((linha) => {
                             let imovelVal = linha[colImovelPrincipal] || linha['IMÓVEL'] || linha['IMOVEL'];
@@ -1311,7 +1304,6 @@
                     let trTotalArrematadosHtml = '';
                     if (linhaTotalArrematados) {
                         let arrematanteTotal = escapeHTML(colArrematante && linhaTotalArrematados[colArrematante] ? linhaTotalArrematados[colArrematante] : 'TOTAL');
-                        let loteTotal = '-'; 
                         let localTotal = escapeHTML(colLocal && linhaTotalArrematados[colLocal] ? linhaTotalArrematados[colLocal] : '-');
                         
                         let vValTotalRaw = (colValorPuro && linhaTotalArrematados[colValorPuro]) ? linhaTotalArrematados[colValorPuro] : (colValorArremateAntigo ? linhaTotalArrematados[colValorArremateAntigo] : null);
@@ -1329,7 +1321,7 @@
                         trTotalArrematadosHtml = `
                             <tr class="bg-blue-100/90 border-t-2 border-navy font-black text-navy text-xs shadow-md">
                                 <td class="p-3.5 text-left uppercase tracking-wider">${arrematanteTotal}</td>
-                                <td class="p-3.5 text-center">${loteTotal}</td>
+                                <td class="p-3.5 text-center">-</td>
                                 <td class="p-3.5 text-left">${localTotal}</td>
                                 <td class="p-3.5 text-center text-sm font-black text-navy">${valorTotalStr}</td>
                                 <td class="p-3.5 text-center">${dataTotal}</td>
@@ -1543,38 +1535,35 @@
                         let listaPagamentos = [];
                         for (let i = 0; i < dadosPagamentosRaw.length; i++) {
                             let linha = dadosPagamentosRaw[i];
-                            let isTotalRow = Object.values(linha).some(v => normalizeStr(String(v)).startsWith('TOTAL'));
+                            let isTotalRow = Object.values(linha).some(v => normalizeStr(String(v)).startsWith('TOTAL') || normalizeStr(String(v)) === 'GERAL');
                             if (!isTotalRow) {
                                 listaPagamentos.push(linha);
                             }
                         }
 
-                        let colunasPag = new Set();
-                        listaPagamentos.forEach(linha => {
-                            Object.keys(linha).forEach(k => {
-                                let norm = normalizeStr(k);
-                                if (k && !k.startsWith('_') && !k.startsWith('#') && norm !== 'ABA' && norm !== 'ORDEM') {
-                                    colunasPag.add(k);
-                                }
-                            });
-                        });
-                        let colunasPagArr = Array.from(colunasPag);
-
-                        let colArrematantePag = colunasPagArr.find(c => normalizeStr(c).includes('ARREMATANTE'));
-                        let colLocalPag = colunasPagArr.find(c => normalizeStr(c).includes('LOCAL') || normalizeStr(c).includes('IMOVEL'));
-
-                        let colunasResumoPag = colunasPagArr.filter(c => {
-                            let n = normalizeStr(c);
-                            return n.includes('TOTAL ARRECADADO') || n.includes('TOTAL ARREMATADO') || 
-                                   n === 'TOTAL' || n === 'VALOR TOTAL' ||
-                                   n.includes('SALDO RESTANTE') || n === 'SALDO' || 
-                                   (n.includes('TOTAL') && n.includes('PAGO'));
-                        });
-
-                        let colunasDetalhePag = colunasPagArr.filter(c => c !== colArrematantePag && c !== colLocalPag && !colunasResumoPag.includes(c));
+                        let todasColunasPagSet = new Set();
+                        dadosPagamentosRaw.forEach(l => Object.keys(l).forEach(k => { if (k && !k.startsWith('_')) todasColunasPagSet.add(k); }));
+                        let todasColunasPag = Array.from(todasColunasPagSet);
+                        
+                        // Garante a definição correta das variáveis essenciais para a tabela de pagamentos
+                        let colArrematantePag = todasColunasPag.find(c => normalizeStr(c).includes('ARREMATANTE'));
+                        let colLocalPag = todasColunasPag.find(c => normalizeStr(c) === 'LOCAL' || normalizeStr(c) === 'IMÓVEL' || normalizeStr(c) === 'IMOVEL');
+                        
+                        // Garante que Total e Saldo sejam salvos para uso no rodapé, mesmo se forem ocultados visualmente
+                        let colunasResumoPag = todasColunasPag.filter(c => normalizeStr(c).includes('SALDO') || normalizeStr(c) === 'TOTAL' || normalizeStr(c) === 'TOTAL ARRECADADO');
+                        let colunasDetalhePag = todasColunasPag.filter(c => c !== colArrematantePag && c !== colLocalPag && !colunasResumoPag.includes(c));
+                        
+                        // Reinjeta Total e Saldo aos detalhes para poder fazer o cálculo exato no JavaScript
+                        if (todasColunasPag.find(c => normalizeStr(c) === 'TOTAL' || normalizeStr(c) === 'TOTAL ARRECADADO') && !colunasDetalhePag.includes(todasColunasPag.find(c => normalizeStr(c) === 'TOTAL' || normalizeStr(c) === 'TOTAL ARRECADADO'))) {
+                             colunasDetalhePag.push(todasColunasPag.find(c => normalizeStr(c) === 'TOTAL' || normalizeStr(c) === 'TOTAL ARRECADADO'));
+                        }
+                        if (todasColunasPag.find(c => normalizeStr(c).includes('SALDO')) && !colunasDetalhePag.includes(todasColunasPag.find(c => normalizeStr(c).includes('SALDO')))) {
+                             colunasDetalhePag.push(todasColunasPag.find(c => normalizeStr(c).includes('SALDO')));
+                        }
 
                         let pagamentosAgrupados = {};
 
+                        let colunasPag = new Set();
                         listaPagamentos.forEach(linha => {
                             let arrematante = colArrematantePag ? escapeHTML(linha[colArrematantePag] || 'Não Informado') : 'Não Informado';
                             if (arrematante === 'Não Informado' || arrematante === '-') return;
@@ -1642,7 +1631,7 @@
                                 <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
                                     <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
                                     <p class="text-xs text-slate-600 leading-relaxed">
-                                        Consolidação dos pagamentos efetuados agrupados por arrematante. Clique no botão de detalhes para visualizar o extrato completo de parcelas, o total arrecadado, total pago e o saldo restante do respectivo lote.
+                                        Consolidação dos pagamentos efetuados agrupados por arrematante. Clique no botão de detalhes para visualizar o extrato completo de parcelas e totalizadores.
                                     </p>
                                 </div>
 
@@ -1934,8 +1923,7 @@
                         }
                     });
 
-                    const colCoordenadaModal = getCol(['COORDENADA']);
-                    if (colCoordenadaModal) {
+                    if (colCoordenada) {
                         setTimeout(() => {
                             const mapContainer = document.getElementById('map-modal');
                             if (mapContainer && !window.modalMap) {
@@ -1971,7 +1959,7 @@
                                     let imovelLimpo = escapeHTML(d[colImovelPrincipal] || d['IMÓVEL'] || d['IMOVEL'] || '-');
                                     if (imovelLimpo === '-' && !(colArrematante && d[colArrematante])) return; 
 
-                                    let coordStr = String(d[colCoordenadaModal] || '').trim();
+                                    let coordStr = String(d[colCoordenada] || '').trim();
                                     let coords = window.parseCoordinates(coordStr);
 
                                     if (coords && coords.length === 2) {
