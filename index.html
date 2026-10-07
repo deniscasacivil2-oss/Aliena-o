@@ -919,6 +919,7 @@
                         if (colArrematados && c === colArrematados) return false;
                         if (colValorArremateAntigo && c === colValorArremateAntigo) return false;
                         if (cUpper.includes('PAGAMENTO') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('VALOR')) return false;
+                        if (cUpper === 'TOTAL' || cUpper.includes('TOTAL ARRECADADO') || cUpper.includes('SALDO') || cUpper === 'PARCELA') return false;
                         return !chavesSetores.some(chave => cUpper.includes(chave) && !cUpper.includes('VALOR') && !cUpper.includes('ESTIMATIVA') && !cUpper.includes('AVALIACAO'));
                     });
 
