@@ -117,13 +117,37 @@
         </div>
     </div>
 
-    <script>
-        // Previne erros de syntax ao injetar dados em atributos JS inline
-        function escapeJS(str) {
-            if (str === null || str === undefined) return '';
-            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        }
+    <!-- MODAL DE PAGAMENTOS -->
+    <div id="modal-pagamentos" class="fixed inset-0 bg-navy/90 z-[100] hidden items-center justify-center p-4 md:p-8 backdrop-blur-sm">
+        <div class="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-300 relative border border-gray-300">
+            <div class="bg-white p-5 flex justify-between items-center z-10 shadow-sm border-b border-gray-200">
+                <h3 class="font-black uppercase tracking-widest text-sm text-navy flex items-center">
+                    <div class="h-8 w-8 rounded-full bg-navy text-gold flex items-center justify-center mr-3 shadow-md border-2 border-gold"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                    Extrato de Pagamentos
+                </h3>
+                <button onclick="fecharModalPagamento()" class="text-gray-400 hover:text-red-500 transition-colors focus:outline-none bg-gray-100 hover:bg-red-50 rounded-full w-8 h-8 flex items-center justify-center"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-grow">
+                <div class="mb-6 border-b border-gray-200 pb-4">
+                    <h2 id="modal-pag-nome" class="text-2xl md:text-3xl font-black text-navy uppercase tracking-tight">Nome do Arrematante</h2>
+                    <p id="modal-pag-local" class="text-sm font-bold text-gray-500 mt-1"><i class="fa-solid fa-map-pin mr-1 text-gold"></i> Localização</p>
+                </div>
 
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" id="modal-pag-cards">
+                    <!-- Cards gerados via JS -->
+                </div>
+
+                <h4 class="font-bold text-navy uppercase tracking-widest text-xs mb-3 flex items-center">
+                    <i class="fa-solid fa-list-check text-gold mr-2"></i> Histórico de Detalhes e Parcelas
+                </h4>
+                <div id="modal-pag-tabelas-container" class="flex flex-col gap-4">
+                    <!-- Tabelas geradas via JS separadas por ano -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
         function escapeHTML(str) {
             if (str === null || str === undefined) return '';
             return String(str).replace(/[&<>'"]/g, tag => ({
@@ -138,6 +162,11 @@
         function normalizeStr(str) {
             if (!str) return '';
             return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+        }
+
+        function escapeJS(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
 
         function toggleSidebar() {
@@ -162,13 +191,13 @@
             document.getElementById('page-title').innerText = titulo;
             
             if (window.appMaps && window.appMaps[sectionId]) {
-                setTimeout(() => { window.appMaps[sectionId].invalidateSize(); }, 100);
+                setTimeout(() => { window.appMaps[sectionId].invalidateSize(); }, 50);
             }
 
             if (window.innerWidth < 768) {
                 document.getElementById('sidebar').classList.replace('w-64', 'w-0');
             }
-        }
+        };
 
         window.parseDinheiro = function(valor) {
             if (valor === null || valor === undefined || valor === '') return 0;
@@ -184,7 +213,7 @@
             }
             let num = parseFloat(vStr.replace(/[^\d.-]/g, ''));
             return isNaN(num) ? 0 : num;
-        }
+        };
 
         window.parseCoordinates = function(coordStr) {
             if (!coordStr) return null;
@@ -195,33 +224,223 @@
             let qMatch = coordStr.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
             if (qMatch) return [parseFloat(qMatch[1]), parseFloat(qMatch[2])];
             return null;
-        }
-
-        window.abrirModalMapaGeral = function() {
-            window.shouldFitBounds = true;
-            abrirModalMapa();
         };
 
-        window.abrirModalMapa = function() {
-            const modal = document.getElementById('modal-mapa');
-            if (modal) {
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                setTimeout(() => {
-                    modal.querySelector('.transform').classList.replace('scale-95', 'scale-100');
-                    if (window.modalMap) {
-                        window.modalMap.invalidateSize();
-                        if (window.modalMapBounds && window.shouldFitBounds) {
-                            window.modalMap.fitBounds(window.modalMapBounds, { padding: [50, 50] });
-                            window.shouldFitBounds = false;
-                        }
-                    }
-                }, 50);
+        window.focarNoMapa = function(idSecao, lat, lng) {
+            if (window.appMaps && window.appMaps[idSecao]) {
+                const map = window.appMaps[idSecao];
+                map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
+                if (window.appMarkers && window.appMarkers[`${idSecao}_${lat}_${lng}`]) {
+                    setTimeout(() => { window.appMarkers[`${idSecao}_${lat}_${lng}`].openPopup(); }, 1500); 
+                }
             }
+        };
+
+        window.abrirModalMapaGeral = function() {
+            const modal = document.getElementById('modal-mapa');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.querySelector('.transform').classList.replace('scale-95', 'scale-100');
+                if (window.modalMap) {
+                    window.modalMap.invalidateSize();
+                    if (window.modalMapBounds) {
+                        window.modalMap.fitBounds(window.modalMapBounds, { padding: [30, 30] });
+                    }
+                }
+            }, 50);
         };
 
         window.fecharModalMapa = function() {
             const modal = document.getElementById('modal-mapa');
+            modal.querySelector('.transform').classList.replace('scale-100', 'scale-95');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 300);
+        };
+
+        window.focarNoMapaModal = function(lat, lng) {
+            window.abrirModalMapaGeral();
+            setTimeout(() => {
+                if (window.modalMap) {
+                    window.modalMap.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
+                    if (window.appMarkers && window.appMarkers[`modal_${lat}_${lng}`]) {
+                        setTimeout(() => { window.appMarkers[`modal_${lat}_${lng}`].openPopup(); }, 1500);
+                    }
+                }
+            }, 400);
+        };
+
+        window.abrirModalPagamento = function(arrematanteId) {
+            const dados = window.dadosPagamentosAgrupados[arrematanteId];
+            if (!dados) return;
+
+            const modal = document.getElementById('modal-pagamentos');
+            document.getElementById('modal-pag-nome').innerText = arrematanteId;
+            document.getElementById('modal-pag-local').innerHTML = `<i class="fa-solid fa-map-pin mr-1 text-gold"></i> ${dados.local}`;
+
+            let cardsHtml = '';
+            window.colunasResumoPagamento.forEach(col => {
+                let valRaw = dados.resumo[col] || '-';
+                let valFormatado = valRaw;
+                let num = window.parseDinheiro(valRaw);
+                if (num > 0 || String(valRaw).includes('R$')) {
+                    valFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+                }
+
+                let borderClass = 'border-blue-400';
+                let textClass = 'text-blue-600';
+                let bgClass = 'bg-blue-50';
+                let icon = 'fa-money-bill';
+
+                let norm = window.normalizeStr(col);
+                if (norm.includes('SALDO') || norm.includes('RESTANTE')) {
+                    borderClass = 'border-orange-400'; textClass = 'text-orange-600'; bgClass = 'bg-orange-50'; icon = 'fa-scale-unbalanced';
+                } else if (norm.includes('PAGO') || norm.includes('EFETUADO')) {
+                    borderClass = 'border-green-400'; textClass = 'text-green-600'; bgClass = 'bg-green-50'; icon = 'fa-check-double';
+                } else if (norm.includes('ARRECADADO') || norm.includes('ARREMATADO') || norm === 'TOTAL') {
+                    borderClass = 'border-navy'; textClass = 'text-navy'; bgClass = 'bg-gray-100'; icon = 'fa-sack-dollar';
+                }
+
+                cardsHtml += `
+                    <div class="card p-5 border-l-4 ${borderClass} shadow-sm bg-white">
+                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate mb-1"><i class="fa-solid ${icon} mr-1 opacity-70"></i> ${escapeHTML(col)}</p>
+                        <h3 class="text-xl font-black ${textClass} mt-1">${escapeHTML(valFormatado)}</h3>
+                    </div>
+                `;
+            });
+            
+            if(window.colunasResumoPagamento.length === 0) {
+                cardsHtml = `<div class="col-span-full text-center p-4 bg-gray-50 text-gray-400 text-xs italic rounded-lg border border-gray-200">Nenhum totalizador consolidado encontrado para este arrematante na planilha.</div>`;
+            }
+            document.getElementById('modal-pag-cards').innerHTML = cardsHtml;
+
+            let colData = window.colunasDetalhePagamento.find(c => window.normalizeStr(c).includes('DATA'));
+            
+            let agrupadoPorAno = {};
+            dados.detalhes.forEach(linha => {
+                let valDataRaw = colData ? linha[colData] : null;
+                let ano = "Sem Ano Especificado";
+                let dataFormatada = '-';
+
+                if (valDataRaw && String(valDataRaw).trim() !== '-') {
+                    let str = String(valDataRaw).trim();
+                    // Processa datas estilo ISO (2026-08-15T...) ou americano (2026-08-15)
+                    if (str.includes('T') && str.match(/^\d{4}-\d{2}-\d{2}T/)) {
+                        let partes = str.split('T')[0].split('-');
+                        ano = partes[0];
+                        dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                    } else if (str.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        let partes = str.split('-');
+                        ano = partes[0];
+                        dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                    } else {
+                        // Tenta achar ano no texto caso venha fora do padrao
+                        let matchAno = str.match(/\b(20\d{2})\b/);
+                        if (matchAno) ano = matchAno[1];
+                        
+                        // Fallback de formatacao dia/mes/ano ja vindo pre-pronto
+                        if(str.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+                            dataFormatada = str.split(' ')[0];
+                        } else {
+                            dataFormatada = str;
+                        }
+                    }
+                }
+                
+                linha._dataFormatada = dataFormatada;
+
+                if (!agrupadoPorAno[ano]) agrupadoPorAno[ano] = [];
+                agrupadoPorAno[ano].push(linha);
+            });
+
+            let tabelasHtml = '';
+            
+            let theadTr = '<tr>';
+            window.colunasDetalhePagamento.forEach(col => {
+                let nCol = window.normalizeStr(col);
+                // Força reconhecimento de colunas como Valor/Pagamento
+                let align = (nCol.includes('VALOR') || nCol.includes('R$') || nCol.includes('PAGO') || nCol.includes('PAGAMENTO')) ? 'text-center' : 'text-left';
+                theadTr += `<th class="p-3 ${align} border-r border-gray-200 min-w-[120px] uppercase text-[10px]">${escapeHTML(col)}</th>`;
+            });
+            theadTr += '</tr>';
+
+            let anosOrdenados = Object.keys(agrupadoPorAno).sort((a,b) => b.localeCompare(a));
+
+            anosOrdenados.forEach(ano => {
+                let linhas = agrupadoPorAno[ano];
+                let tbodyHtml = '';
+                
+                linhas.forEach((linha, i) => {
+                    let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 hover:bg-blue-50 transition-colors`;
+                    tbodyHtml += `<tr class="${trClasses}">`;
+                    
+                    window.colunasDetalhePagamento.forEach(col => {
+                        let nCol = window.normalizeStr(col);
+                        let isDateCol = (col === colData);
+                        let isCurrency = nCol.includes('VALOR') || nCol.includes('R$') || nCol.includes('PAGO') || nCol.includes('PAGAMENTO');
+                        
+                        let valRaw = linha[col];
+                        let isMissing = valRaw === undefined || valRaw === null || valRaw === '' || valRaw === '-';
+                        
+                        let align = isCurrency ? 'text-center font-bold text-navy' : 'text-left text-gray-700';
+                        let content = '-';
+                        
+                        if (!isMissing) {
+                            if (isDateCol) {
+                                content = escapeHTML(linha._dataFormatada);
+                            } else if (isCurrency) {
+                                let num = window.parseDinheiro(valRaw);
+                                if (num > 0 || String(valRaw).includes('R$')) {
+                                    content = escapeHTML(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num));
+                                } else {
+                                    content = escapeHTML(valRaw);
+                                }
+                            } else {
+                                content = escapeHTML(String(valRaw));
+                            }
+                        }
+                        
+                        tbodyHtml += `<td class="p-3 ${align} text-xs whitespace-normal border-r border-gray-100">${content}</td>`;
+                    });
+                    tbodyHtml += '</tr>';
+                });
+                
+                tabelasHtml += `
+                    <div class="card overflow-hidden shadow-sm bg-white border border-gray-200">
+                        <div class="bg-gray-100 p-2 border-b border-gray-200">
+                            <h5 class="font-bold text-navy text-xs px-2"><i class="fa-regular fa-calendar text-gold mr-1"></i> Ano de Exercício: ${escapeHTML(ano)}</h5>
+                        </div>
+                        <div class="overflow-x-auto custom-scrollbar">
+                            <table class="w-full text-left text-xs border-collapse">
+                                <thead class="bg-gray-50 text-gray-600 shadow-sm">
+                                    ${theadTr}
+                                </thead>
+                                <tbody class="text-gray-800 font-medium">
+                                    ${tbodyHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            if (anosOrdenados.length === 0) {
+                tabelasHtml = `<div class="p-6 text-center text-gray-500 italic bg-white border border-gray-200 rounded-lg shadow-sm">Nenhum detalhe de parcela encontrado.</div>`;
+            }
+
+            document.getElementById('modal-pag-tabelas-container').innerHTML = tabelasHtml;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.querySelector('.transform').classList.replace('scale-95', 'scale-100');
+            }, 50);
+        };
+
+        window.fecharModalPagamento = function() {
+            const modal = document.getElementById('modal-pagamentos');
             if (modal) {
                 modal.querySelector('.transform').classList.replace('scale-100', 'scale-95');
                 setTimeout(() => {
@@ -229,19 +448,6 @@
                     modal.classList.add('hidden');
                 }, 300);
             }
-        };
-
-        window.focarNoMapaModal = function(lat, lng) {
-            window.shouldFitBounds = false;
-            window.abrirModalMapa();
-            setTimeout(() => {
-                if (window.modalMap) {
-                    window.modalMap.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
-                    if (window.appMarkers && window.appMarkers[`modal_${lat}_${lng}`]) {
-                        setTimeout(() => { window.appMarkers[`modal_${lat}_${lng}`].openPopup(); }, 1500); 
-                    }
-                }
-            }, 300);
         };
 
         async function carregarDados() {
@@ -268,8 +474,11 @@
                         { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Saldo em conta", "VALOR": "R$ 500.000,00" },
                         { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Disponível para uso de suplementação", "VALOR": "R$ 200.000,00" },
                         { "_ABA": "Investimento", "ANO": "Card", "INVESTIMENTO REALIZADO": "Saldo livre", "VALOR": "R$ 100.000,00" },
-                        { "_ABA": "Investimento", "ANO": "2025", "INVESTIMENTO REALIZADO": "Reforma da Praça Central e Vias Urbanas", "VALOR": "R$ 150.000,00" },
-                        { "_ABA": "Investimento", "ANO": "2026", "INVESTIMENTO REALIZADO": "Pavimentação e Infraestrutura Bairro Novo", "VALOR": "R$ 300.000,00" }
+                        { "_ABA": "Investimento", "ANO": "2025", "INVESTIMENTO REALIZADO": "Reforma Praça Central", "VALOR": "R$ 150.000,00" },
+                        { "_ABA": "Investimento", "ANO": "2026", "INVESTIMENTO REALIZADO": "Pavimentação Bairro Novo", "VALOR": "R$ 300.000,00" },
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "Maria Luiza Ltda", "DATA DE PAGAMENTO": "15/08/2026", "PARCELA": "1 de 3", "VALOR PAGO": "R$ 45.000,00" },
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "João Silva Empreendimentos", "DATA DE PAGAMENTO": "22/08/2026", "PARCELA": "Única", "VALOR PAGO": "R$ 160.000,00" },
+                        { "_ABA": "Pagamentos Efetuados", "ARREMATANTE": "TOTAL", "DATA DE PAGAMENTO": "-", "PARCELA": "-", "VALOR PAGO": "R$ 205.000,00" }
                     ];
                     textoResposta = JSON.stringify(mockData);
                 }
@@ -285,10 +494,8 @@
 
                 let dadosValidos = dadosCompletos.filter(linha => {
                     let temInfo = false;
-                    Object.entries(linha).forEach(([k, val]) => {
-                        if (k && !k.startsWith('#') && !k.startsWith('_') && String(val).trim() !== '' && String(val).trim() !== '-') {
-                            temInfo = true;
-                        }
+                    Object.values(linha).forEach(val => {
+                        if (String(val).trim() !== '' && String(val).trim() !== '-') temInfo = true;
                     });
                     return temInfo;
                 });
@@ -296,6 +503,7 @@
                 let dadosImoveis = [];
                 let dadosArrematadosRaw = [];
                 let dadosInvestimentoRaw = [];
+                let dadosPagamentosRaw = [];
 
                 let temPropAba = dadosValidos.some(l => l['_ABA'] || l['ABA']);
 
@@ -305,13 +513,14 @@
                         dadosArrematadosRaw.push(linha);
                     } else if (abaNorm.includes('INVESTIMEN')) {
                         dadosInvestimentoRaw.push(linha);
+                    } else if (abaNorm.includes('PAGAMENTO')) {
+                        dadosPagamentosRaw.push(linha);
                     } else {
                         dadosImoveis.push(linha);
                     }
                 });
 
-                if (dadosArrematadosRaw.length === 0) {
-                    dadosValidos.forEach(linha => {
+                let linhaTotal = dadosValidos.find(linha => {
                         let abaNorm = normalizeStr(linha['_ABA'] || linha['ABA'] || '');
                         if (!abaNorm.includes('INVESTIMEN')) {
                             let keys = Object.keys(linha);
@@ -331,7 +540,6 @@
                             }
                         }
                     });
-                }
 
                 let linhaTotalImoveis = dadosImoveis.find(linha => {
                     let keys = Object.keys(linha);
@@ -1318,6 +1526,142 @@
 
                                 ${cardsHtmlInv}
                                 ${gridsHtml}
+                            </section>
+                        `;
+                    }
+
+                    if (dadosPagamentosRaw.length > 0) {
+                        const idSecaoPagamentos = 'secao-pagamentos';
+
+                        menuLateral.innerHTML += `
+                            <a href="#" onclick="showSection('${idSecaoPagamentos}', this, 'Pagamentos Efetuados')" class="nav-link flex items-center space-x-3 p-3 text-blue-100 hover:bg-blue-800">
+                                <i class="fa-solid fa-money-check-dollar w-6 text-center"></i>
+                                <span class="truncate text-[11px] font-bold tracking-wider uppercase">Pagamentos Efetuados</span>
+                            </a>
+                        `;
+
+                        let listaPagamentos = [];
+                        for (let i = 0; i < dadosPagamentosRaw.length; i++) {
+                            let linha = dadosPagamentosRaw[i];
+                            let isTotalRow = Object.values(linha).some(v => normalizeStr(String(v)).startsWith('TOTAL'));
+                            if (!isTotalRow) {
+                                listaPagamentos.push(linha);
+                            }
+                        }
+
+                        let colunasPag = new Set();
+                        listaPagamentos.forEach(linha => {
+                            Object.keys(linha).forEach(k => {
+                                let norm = normalizeStr(k);
+                                if (k && !k.startsWith('_') && !k.startsWith('#') && norm !== 'ABA' && norm !== 'ORDEM') {
+                                    colunasPag.add(k);
+                                }
+                            });
+                        });
+                        let colunasPagArr = Array.from(colunasPag);
+
+                        let colArrematantePag = colunasPagArr.find(c => normalizeStr(c).includes('ARREMATANTE'));
+                        let colLocalPag = colunasPagArr.find(c => normalizeStr(c).includes('LOCAL') || normalizeStr(c).includes('IMOVEL'));
+
+                        let colunasResumoPag = colunasPagArr.filter(c => {
+                            let n = normalizeStr(c);
+                            return n.includes('TOTAL ARRECADADO') || n.includes('TOTAL ARREMATADO') || 
+                                   n === 'TOTAL' || n === 'VALOR TOTAL' ||
+                                   n.includes('SALDO RESTANTE') || n === 'SALDO' || 
+                                   (n.includes('TOTAL') && n.includes('PAGO'));
+                        });
+
+                        let colunasDetalhePag = colunasPagArr.filter(c => c !== colArrematantePag && c !== colLocalPag && !colunasResumoPag.includes(c));
+
+                        let pagamentosAgrupados = {};
+
+                        listaPagamentos.forEach(linha => {
+                            let arrematante = colArrematantePag ? escapeHTML(linha[colArrematantePag] || 'Não Informado') : 'Não Informado';
+                            if (arrematante === 'Não Informado' || arrematante === '-') return;
+
+                            if (!pagamentosAgrupados[arrematante]) {
+                                pagamentosAgrupados[arrematante] = {
+                                    local: colLocalPag ? escapeHTML(linha[colLocalPag] || '-') : '-',
+                                    resumo: {},
+                                    detalhes: []
+                                };
+                            }
+
+                            colunasResumoPag.forEach(col => {
+                                let val = linha[col];
+                                if (val && String(val).trim() !== '-' && String(val).trim() !== '') {
+                                    if (!pagamentosAgrupados[arrematante].resumo[col] || window.parseDinheiro(val) > window.parseDinheiro(pagamentosAgrupados[arrematante].resumo[col])) {
+                                        pagamentosAgrupados[arrematante].resumo[col] = val;
+                                    }
+                                }
+                            });
+
+                            let linhaDetalhe = {};
+                            let temDadoValido = false;
+                            colunasDetalhePag.forEach(col => {
+                                linhaDetalhe[col] = linha[col];
+                                if (linha[col] && String(linha[col]).trim() !== '-' && String(linha[col]).trim() !== '') {
+                                    temDadoValido = true;
+                                }
+                            });
+                            if (temDadoValido) {
+                                pagamentosAgrupados[arrematante].detalhes.push(linhaDetalhe);
+                            }
+                        });
+
+                        window.dadosPagamentosAgrupados = pagamentosAgrupados;
+                        window.colunasDetalhePagamento = colunasDetalhePag;
+                        window.colunasResumoPagamento = colunasResumoPag;
+
+                        let tbodyMain = '';
+                        let idxArrematante = 0;
+                        Object.keys(pagamentosAgrupados).forEach(arrematante => {
+                            let dados = pagamentosAgrupados[arrematante];
+                            let trClasses = `${idxArrematante % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-200 hover:bg-blue-50 transition-colors group`;
+                            idxArrematante++;
+
+                            tbodyMain += `
+                                <tr class="${trClasses}">
+                                    <td class="p-4 text-left font-bold text-navy whitespace-normal break-words border-r border-gray-100">${arrematante}</td>
+                                    <td class="p-4 text-left text-gray-600 text-xs whitespace-normal break-words border-r border-gray-100">${dados.local}</td>
+                                    <td class="p-4 text-center">
+                                        <button onclick="abrirModalPagamento('${escapeJS(arrematante)}')" class="bg-white border border-gray-300 text-navy hover:bg-navy hover:text-gold hover:border-navy px-4 py-2 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm inline-flex items-center gap-2 group-hover:scale-105">
+                                            <i class="fa-solid fa-folder-open"></i> Abrir Detalhes
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+
+                        if (Object.keys(pagamentosAgrupados).length === 0) {
+                            tbodyMain = `<tr><td colspan="3" class="p-6 text-center text-gray-500 italic">Nenhum arrematante com pagamentos registrado na aba da planilha.</td></tr>`;
+                        }
+
+                        conteinerSecoes.innerHTML += `
+                            <section id="${idSecaoPagamentos}" class="section-content">
+                                <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
+                                    <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
+                                    <p class="text-xs text-slate-600 leading-relaxed">
+                                        Consolidação dos pagamentos efetuados agrupados por arrematante. Clique no botão de detalhes para visualizar o extrato completo de parcelas, o total arrecadado, total pago e o saldo restante do respectivo lote.
+                                    </p>
+                                </div>
+
+                                <div class="card overflow-hidden shadow-md bg-white w-full">
+                                    <div class="w-full overflow-x-auto custom-scrollbar">
+                                        <table class="w-full text-left text-xs border-collapse">
+                                            <thead class="uppercase text-[11px] bg-gray-200 text-black shadow-sm">
+                                                <tr>
+                                                    <th class="p-4 text-left border-r border-gray-300 w-[40%]">Arrematante</th>
+                                                    <th class="p-4 text-left border-r border-gray-300 w-[45%]">Local / Imóvel</th>
+                                                    <th class="p-4 text-center w-[15%]">Ação</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="text-gray-800 font-medium">
+                                                ${tbodyMain}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </section>
                         `;
                     }
