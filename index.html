@@ -249,21 +249,16 @@
             let colData = window.colunasDetalhePagamento.find(c => window.normalizeStr(c).includes('DATA'));
             let colValor = window.colunasDetalhePagamento.find(c => {
                 let n = window.normalizeStr(c);
-                return n.includes('VALOR') || n.includes('R$') || n.includes('PAGO') || n.includes('PAGAMENTO');
+                return (n.includes('VALOR') || n.includes('R$') || n.includes('PAGO') || n.includes('PAGAMENTO')) && !n.includes('TOTAL') && !n.includes('SALDO');
             });
             
-            let colTotal = window.colunasDetalhePagamento.find(c => window.normalizeStr(c) === 'TOTAL');
-            let colSaldo = window.colunasDetalhePagamento.find(c => window.normalizeStr(c).includes('SALDO'));
+            let colArrecadado = window.colunasResumoPagamento.find(c => window.normalizeStr(c) === 'TOTAL ARRECADADO');
+            let colTotal = window.colunasResumoPagamento.find(c => window.normalizeStr(c) === 'TOTAL');
+            let colSaldo = window.colunasResumoPagamento.find(c => window.normalizeStr(c).includes('SALDO'));
             
-            // Remove as colunas totalizadoras da exibição visual na tabela de parcelas
-            let colunasParaTabela = window.colunasDetalhePagamento.filter(c => {
-                 let n = window.normalizeStr(c);
-                 return n !== 'TOTAL' && n !== 'TOTAL ARRECADADO' && !n.includes('SALDO');
-            });
+            let colunasParaTabela = window.colunasDetalhePagamento;
 
-            let sum2025 = 0;
-            let sum2026 = 0;
-            let sumGeral = 0;
+            let sumGeralDinheiro = 0;
             let agrupadoPorAno = {};
 
             dados.detalhes.forEach(linha => {
@@ -294,81 +289,19 @@
                 }
                 
                 linha._dataFormatada = dataFormatada;
-
                 let valNum = window.parseDinheiro(colValor ? linha[colValor] : 0);
                 
-                if (!agrupadoPorAno[ano]) agrupadoPorAno[ano] = { linhas: [], soma: 0, valTotalLote: 0, valSaldoRestante: 0 };
+                if (!agrupadoPorAno[ano]) agrupadoPorAno[ano] = { linhas: [], somaValoresTabela: 0 };
                 agrupadoPorAno[ano].linhas.push(linha);
-                agrupadoPorAno[ano].soma += valNum;
-
-                // Captura os valores de Total e Saldo para o rodapé do ano
-                if (colTotal && linha[colTotal] && String(linha[colTotal]).trim() !== '-' && String(linha[colTotal]).trim() !== '') {
-                     let numT = window.parseDinheiro(linha[colTotal]);
-                     if (numT > agrupadoPorAno[ano].valTotalLote) agrupadoPorAno[ano].valTotalLote = numT;
-                }
-                if (colSaldo && (linha[colSaldo] !== undefined) && String(linha[colSaldo]).trim() !== '-' && String(linha[colSaldo]).trim() !== '') {
-                     let numS = window.parseDinheiro(linha[colSaldo]);
-                     if (numS > agrupadoPorAno[ano].valSaldoRestante) agrupadoPorAno[ano].valSaldoRestante = numS;
-                }
-
-                sumGeral += valNum;
-                if (ano === '2025') sum2025 += valNum;
-                if (ano === '2026') sum2026 += valNum;
+                agrupadoPorAno[ano].somaValoresTabela += valNum;
+                sumGeralDinheiro += valNum;
             });
 
             const fmtCur = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
-            // Cálculo dos Totais Globais do Arrematante (Todos os Anos)
-            let valTotalLoteGlobal = 0;
-            let colTotalGlobal = window.colunasResumoPagamento.find(c => window.normalizeStr(c) === 'TOTAL' || window.normalizeStr(c) === 'TOTAL DO LOTE');
-            if (colTotalGlobal) {
-                let totais = dados.detalhes.map(r => window.parseDinheiro(r[colTotalGlobal])).filter(n => n > 0);
-                if (totais.length > 0) valTotalLoteGlobal = Math.max(...totais);
-            }
-
-            let valSaldoGlobal = 0;
-            let colSaldoGlobal = window.colunasResumoPagamento.find(c => window.normalizeStr(c).includes('SALDO'));
-            let saldoDefinido = false;
-            if (colSaldoGlobal) {
-                let saldosValidos = dados.detalhes.filter(r => r[colSaldoGlobal] !== undefined && String(r[colSaldoGlobal]).trim() !== '' && String(r[colSaldoGlobal]).trim() !== '-');
-                if (saldosValidos.length > 0) {
-                    let saldosNum = saldosValidos.map(r => window.parseDinheiro(r[colSaldoGlobal]));
-                    valSaldoGlobal = Math.min(...saldosNum); // Pega o menor saldo (mais recente)
-                    saldoDefinido = true;
-                }
-            }
-
-            // Fallback: se a planilha não preencher o saldo, o sistema calcula a diferença sozinho
-            if (!saldoDefinido && valTotalLoteGlobal > 0) {
-                valSaldoGlobal = valTotalLoteGlobal - sumGeral;
-                if (valSaldoGlobal < 0) valSaldoGlobal = 0;
-            }
-
-            // Cores dinâmicas: Amarelo se dever (Saldo > 0), Verde se quitado (Saldo = 0)
-            let colorArrecadadoBg = valSaldoGlobal > 0 ? 'bg-yellow-100' : 'bg-green-100';
-            let colorArrecadadoBorder = valSaldoGlobal > 0 ? 'border-yellow-400' : 'border-green-500';
-            let colorArrecadadoText = valSaldoGlobal > 0 ? 'text-yellow-800' : 'text-green-800';
-            let iconArrecadado = valSaldoGlobal > 0 ? '<i class="fa-solid fa-clock-rotate-left"></i>' : '<i class="fa-solid fa-check-double"></i>';
-            let statusText = valSaldoGlobal > 0 ? 'Em Andamento' : 'Quitado';
-
-            let colorSaldoBg = valSaldoGlobal > 0 ? 'bg-orange-50' : 'bg-gray-50';
-            let colorSaldoBorder = valSaldoGlobal > 0 ? 'border-orange-500' : 'border-gray-300';
-            let colorSaldoText = valSaldoGlobal > 0 ? 'text-orange-700' : 'text-gray-500';
-
-            document.getElementById('modal-pag-cards').innerHTML = `
-                <div class="card p-5 border-l-4 border-navy shadow-sm bg-white">
-                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"><i class="fa-solid fa-file-invoice mr-1 opacity-70"></i> TOTAL DO LOTE (GERAL)</p>
-                    <h3 class="text-xl font-black text-navy mt-1">${escapeHTML(fmtCur.format(valTotalLoteGlobal))}</h3>
-                </div>
-                <div class="card p-5 border-l-4 ${colorArrecadadoBorder} shadow-sm ${colorArrecadadoBg} transform transition-transform hover:scale-105 relative">
-                    <p class="text-[10px] font-bold ${colorArrecadadoText} uppercase tracking-wider mb-1">${iconArrecadado} TOTAL ARRECADADO <span class="absolute top-4 right-4 bg-white/60 px-2 py-0.5 rounded text-[8px] font-black shadow-sm uppercase">${statusText}</span></p>
-                    <h3 class="text-xl font-black ${colorArrecadadoText} mt-1">${escapeHTML(fmtCur.format(sumGeral))}</h3>
-                </div>
-                <div class="card p-5 border-l-4 ${colorSaldoBorder} shadow-sm ${colorSaldoBg}">
-                    <p class="text-[10px] font-bold ${colorSaldoText} uppercase tracking-wider mb-1"><i class="fa-solid fa-scale-unbalanced mr-1 opacity-70"></i> SALDO RESTANTE</p>
-                    <h3 class="text-xl font-black ${colorSaldoText} mt-1">${escapeHTML(fmtCur.format(valSaldoGlobal))}</h3>
-                </div>
-            `;
+            let minSaldoGlobal = null;
+            let maxTotalLoteGlobal = 0;
+            let somaTotalArrecadadoGlobal = 0;
 
             let tabelasHtml = '';
             
@@ -386,10 +319,31 @@
                 let grupo = agrupadoPorAno[ano];
                 let tbodyHtml = '';
                 
+                let maxArrecadadoPlanilha = 0;
+                let maxTotalPlanilha = 0;
+                let minSaldoPlanilha = null;
+
                 grupo.linhas.forEach((linha, i) => {
                     let trClasses = `${i % 2 === 0 ? 'bg-gray-50' : ''} border-b border-gray-200 hover:bg-blue-50 transition-colors`;
                     tbodyHtml += `<tr class="${trClasses}">`;
                     
+                    // Extrai valores das colunas de totalizadores exclusivas da planilha para este ano
+                    if (colArrecadado) {
+                        let v = window.parseDinheiro(linha[colArrecadado]);
+                        if (v > maxArrecadadoPlanilha) maxArrecadadoPlanilha = v;
+                    }
+                    if (colTotal) {
+                        let v = window.parseDinheiro(linha[colTotal]);
+                        if (v > maxTotalPlanilha) maxTotalPlanilha = v;
+                    }
+                    if (colSaldo) {
+                        let valRaw = linha[colSaldo];
+                        if (valRaw !== undefined && valRaw !== null && String(valRaw).trim() !== '' && String(valRaw).trim() !== '-') {
+                            let v = window.parseDinheiro(valRaw);
+                            if (minSaldoPlanilha === null || v < minSaldoPlanilha) minSaldoPlanilha = v;
+                        }
+                    }
+
                     colunasParaTabela.forEach(col => {
                         let nCol = window.normalizeStr(col);
                         let isDateCol = (col === colData);
@@ -419,48 +373,41 @@
                 
                 let colSpanFooter = colunasParaTabela.length > 1 ? colunasParaTabela.length - 1 : 1;
 
+                // Valores finais exibidos respeitam EXCLUSIVAMENTE a planilha. Se a planilha estiver em branco, usa a soma de fallback
+                let valDisplayArrecadado = maxArrecadadoPlanilha > 0 ? maxArrecadadoPlanilha : grupo.somaValoresTabela;
+                somaTotalArrecadadoGlobal += valDisplayArrecadado;
+                
+                if (maxTotalPlanilha > maxTotalLoteGlobal) maxTotalLoteGlobal = maxTotalPlanilha;
+                if (minSaldoPlanilha !== null) {
+                    if (minSaldoGlobal === null || minSaldoPlanilha < minSaldoGlobal) minSaldoGlobal = minSaldoPlanilha;
+                }
+
                 let rowTotalArrecadado = `
                     <tr>
-                        <td colspan="${colSpanFooter}" class="p-3 text-right uppercase text-[10px] tracking-widest border-r border-blue-100 text-blue-800">TOTAL ARRECADADO</td>
-                        <td class="p-3 text-center text-xs whitespace-nowrap text-blue-900">${escapeHTML(fmtCur.format(grupo.soma))}</td>
+                        <td colspan="${colSpanFooter}" class="p-3 text-right font-black uppercase text-[10px] tracking-widest border-r border-blue-200 text-blue-900 bg-blue-50/50">TOTAL ARRECADADO</td>
+                        <td class="p-3 text-center text-xs whitespace-nowrap font-black text-blue-900 bg-blue-50/50">${escapeHTML(fmtCur.format(valDisplayArrecadado))}</td>
                     </tr>
                 `;
 
                 let rowTotal = '';
-                if (grupo.valTotalLote > 0 || (colTotal && dados.resumo[colTotal] && window.parseDinheiro(dados.resumo[colTotal]) > 0)) {
-                    let vT = grupo.valTotalLote > 0 ? grupo.valTotalLote : window.parseDinheiro(dados.resumo[colTotal]);
+                if (maxTotalPlanilha > 0) {
                     rowTotal = `
                         <tr class="bg-gray-100 border-t border-gray-200">
                             <td colspan="${colSpanFooter}" class="p-3 text-right uppercase text-[10px] tracking-widest border-r border-gray-200 text-gray-600">TOTAL DO LOTE</td>
-                            <td class="p-3 text-center text-xs whitespace-nowrap text-gray-800">${escapeHTML(fmtCur.format(vT))}</td>
+                            <td class="p-3 text-center text-xs whitespace-nowrap text-gray-800">${escapeHTML(fmtCur.format(maxTotalPlanilha))}</td>
                         </tr>
                     `;
                 }
 
                 let rowSaldo = '';
-                let hasSaldo = false;
-                let valSaldo = 0;
-                
-                let nomeColSaldoEncontrada = colSaldo || window.colunasResumoPagamento.find(c => window.normalizeStr(c).includes('SALDO'));
-
-                if (grupo.valSaldoRestante > 0) {
-                     valSaldo = grupo.valSaldoRestante;
-                     hasSaldo = true;
-                } else if (nomeColSaldoEncontrada && dados.resumo[nomeColSaldoEncontrada] && String(dados.resumo[nomeColSaldoEncontrada]).trim() !== '-' && String(dados.resumo[nomeColSaldoEncontrada]).trim() !== '') {
-                     valSaldo = window.parseDinheiro(dados.resumo[nomeColSaldoEncontrada]);
-                     hasSaldo = true;
-                } else if (nomeColSaldoEncontrada) {
-                     hasSaldo = true;
-                }
-
-                if (hasSaldo) {
-                    let corSaldo = valSaldo > 0 ? 'text-orange-600' : 'text-green-600';
-                    let bgSaldo = valSaldo > 0 ? 'bg-orange-50' : 'bg-green-50';
-                    let borderSaldo = valSaldo > 0 ? 'border-orange-200' : 'border-green-200';
+                if (minSaldoPlanilha !== null) {
+                    let corSaldo = minSaldoPlanilha > 0 ? 'text-orange-600' : 'text-green-600';
+                    let bgSaldo = minSaldoPlanilha > 0 ? 'bg-orange-50' : 'bg-green-50';
+                    let borderSaldo = minSaldoPlanilha > 0 ? 'border-orange-200' : 'border-green-200';
                     rowSaldo = `
                         <tr class="${bgSaldo} border-t ${borderSaldo}">
-                            <td colspan="${colSpanFooter}" class="p-3 text-right uppercase text-[10px] tracking-widest border-r ${borderSaldo} ${corSaldo}">SALDO RESTANTE</td>
-                            <td class="p-3 text-center text-xs font-black whitespace-nowrap ${corSaldo}">${escapeHTML(fmtCur.format(valSaldo))}</td>
+                            <td colspan="${colSpanFooter}" class="p-3 text-right uppercase text-[10px] font-bold tracking-widest border-r ${borderSaldo} ${corSaldo}">SALDO RESTANTE</td>
+                            <td class="p-3 text-center text-xs font-black whitespace-nowrap ${corSaldo}">${escapeHTML(fmtCur.format(minSaldoPlanilha))}</td>
                         </tr>
                     `;
                 }
@@ -478,7 +425,7 @@
                                 <tbody class="text-gray-800 font-medium">
                                     ${tbodyHtml}
                                 </tbody>
-                                <tfoot class="bg-blue-50 border-t-2 border-blue-200 font-bold shadow-inner">
+                                <tfoot class="bg-white border-t-2 border-blue-200 font-bold shadow-inner">
                                     ${rowTotalArrecadado}
                                     ${rowTotal}
                                     ${rowSaldo}
@@ -490,16 +437,42 @@
             });
             
             if (anosOrdenados.length === 0) {
-                tabelasHtml = `<div class="p-6 text-center text-gray-500 italic bg-white border border-gray-200 rounded-lg shadow-sm">Nenhum detalhe de parcela encontrado.</div>`;
+                tabelasHtml = `<div class="p-6 text-center text-gray-500 italic bg-white border border-gray-200 rounded-lg shadow-sm">Nenhum detalhe encontrado.</div>`;
             }
 
             document.getElementById('modal-pag-tabelas-container').innerHTML = tabelasHtml;
 
+            // Painel de Cards Superiores (Global do Arrematante na Planilha)
+            let valSaldoExibicao = minSaldoGlobal !== null ? minSaldoGlobal : 0;
+            
+            let colorArrecadadoBg = valSaldoExibicao > 0 ? 'bg-yellow-100' : 'bg-green-100';
+            let colorArrecadadoBorder = valSaldoExibicao > 0 ? 'border-yellow-400' : 'border-green-500';
+            let colorArrecadadoText = valSaldoExibicao > 0 ? 'text-yellow-800' : 'text-green-800';
+            let iconArrecadado = valSaldoExibicao > 0 ? '<i class="fa-solid fa-clock-rotate-left"></i>' : '<i class="fa-solid fa-check-double"></i>';
+            let statusText = valSaldoExibicao > 0 ? 'Em Andamento' : 'Quitado';
+
+            let colorSaldoBg = valSaldoExibicao > 0 ? 'bg-orange-50' : 'bg-gray-50';
+            let colorSaldoBorder = valSaldoExibicao > 0 ? 'border-orange-500' : 'border-gray-300';
+            let colorSaldoText = valSaldoExibicao > 0 ? 'text-orange-700' : 'text-gray-500';
+
+            document.getElementById('modal-pag-cards').innerHTML = `
+                <div class="card p-5 border-l-4 border-navy shadow-sm bg-white">
+                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"><i class="fa-solid fa-file-invoice mr-1 opacity-70"></i> TOTAL DO LOTE (GERAL)</p>
+                    <h3 class="text-xl font-black text-navy mt-1">${escapeHTML(fmtCur.format(maxTotalLoteGlobal))}</h3>
+                </div>
+                <div class="card p-5 border-l-4 ${colorArrecadadoBorder} shadow-sm ${colorArrecadadoBg} transform transition-transform hover:scale-105 relative">
+                    <p class="text-[10px] font-bold ${colorArrecadadoText} uppercase tracking-wider mb-1">${iconArrecadado} TOTAL ARRECADADO <span class="absolute top-4 right-4 bg-white/60 px-2 py-0.5 rounded text-[8px] font-black shadow-sm uppercase">${statusText}</span></p>
+                    <h3 class="text-xl font-black ${colorArrecadadoText} mt-1">${escapeHTML(fmtCur.format(somaTotalArrecadadoGlobal))}</h3>
+                </div>
+                <div class="card p-5 border-l-4 ${colorSaldoBorder} shadow-sm ${colorSaldoBg}">
+                    <p class="text-[10px] font-bold ${colorSaldoText} uppercase tracking-wider mb-1"><i class="fa-solid fa-scale-unbalanced mr-1 opacity-70"></i> SALDO RESTANTE</p>
+                    <h3 class="text-xl font-black ${colorSaldoText} mt-1">${escapeHTML(fmtCur.format(valSaldoExibicao))}</h3>
+                </div>
+            `;
+
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            setTimeout(() => {
-                modal.querySelector('.transform').classList.replace('scale-95', 'scale-100');
-            }, 50);
+            setTimeout(() => { modal.querySelector('.transform').classList.replace('scale-95', 'scale-100'); }, 50);
         };
 
         window.fecharModalPagamento = function() {
@@ -1131,28 +1104,28 @@
                             cardsEstimativaHtml = `
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                                     <div class="card p-4 border-l-4 border-gray-400 shadow-sm bg-white">
-                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Pendente (Vazio)</p>
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Pendente</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countPendente} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
                                             <span class="text-[9px] font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">${escapeHTML(fmt.format(valPendente))}</span>
                                         </div>
                                     </div>
                                     <div class="card p-4 border-l-4 border-blue-400 shadow-sm bg-white">
-                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Iniciado (Total)</p>
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Iniciado</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countIniciado} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
                                             <span class="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">${escapeHTML(fmt.format(valIniciado))}</span>
                                         </div>
                                     </div>
                                     <div class="card p-4 border-l-4 border-orange-500 shadow-sm bg-white">
-                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Andamento (Tem X)</p>
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Andamento</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countAndamento} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
                                             <span class="text-[9px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded">${escapeHTML(fmt.format(valAndamento))}</span>
                                         </div>
                                     </div>
                                     <div class="card p-4 border-l-4 border-green-500 shadow-sm bg-white">
-                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Concluído (Final V)</p>
+                                        <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate">Concluído</p>
                                         <div class="flex items-baseline justify-between mt-1">
                                             <h3 class="text-xl font-black text-navy">${countConcluido} <span class="text-[9px] font-medium text-gray-400 uppercase">imóveis</span></h3>
                                             <span class="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded">${escapeHTML(fmt.format(valConcluido))}</span>
@@ -1561,6 +1534,14 @@
                     }
 
                     if (dadosPagamentosRaw.length > 0) {
+                        const colunasPagSet = new Set();
+                        dadosPagamentosRaw.forEach(linha => Object.keys(linha).forEach(chave => {
+                            if (chave && !chave.startsWith('#') && !chave.startsWith('_')) {
+                                colunasPagSet.add(chave);
+                            }
+                        }));
+                        const todasColunasPag = Array.from(colunasPagSet);
+
                         const idSecaoPagamentos = 'secao-pagamentos';
 
                         menuLateral.innerHTML += `
@@ -1570,57 +1551,59 @@
                             </a>
                         `;
 
-                        let listaPagamentos = [];
-                        for (let i = 0; i < dadosPagamentosRaw.length; i++) {
-                            let linha = dadosPagamentosRaw[i];
-                            let isTotalRow = Object.values(linha).some(v => normalizeStr(String(v)).startsWith('TOTAL') || normalizeStr(String(v)) === 'GERAL');
-                            if (!isTotalRow) {
-                                listaPagamentos.push(linha);
-                            }
-                        }
-
-                        let todasColunasPagSet = new Set();
-                        dadosPagamentosRaw.forEach(l => Object.keys(l).forEach(k => { if (k && !k.startsWith('_')) todasColunasPagSet.add(k); }));
-                        let todasColunasPag = Array.from(todasColunasPagSet);
-                        
-                        // Garante a definição correta das variáveis essenciais para a tabela de pagamentos
                         let colArrematantePag = todasColunasPag.find(c => normalizeStr(c).includes('ARREMATANTE'));
                         let colLocalPag = todasColunasPag.find(c => normalizeStr(c) === 'LOCAL' || normalizeStr(c) === 'IMÓVEL' || normalizeStr(c) === 'IMOVEL');
+                        let colDataPag = todasColunasPag.find(c => normalizeStr(c) === 'DATA' || normalizeStr(c).includes('DATA'));
                         
-                        // Garante que Total e Saldo sejam salvos para uso no rodapé, mesmo se forem ocultados visualmente
                         let colunasResumoPag = todasColunasPag.filter(c => normalizeStr(c).includes('SALDO') || normalizeStr(c) === 'TOTAL' || normalizeStr(c) === 'TOTAL ARRECADADO');
                         let colunasDetalhePag = todasColunasPag.filter(c => c !== colArrematantePag && c !== colLocalPag && !colunasResumoPag.includes(c));
                         
-                        // Reinjeta Total e Saldo aos detalhes para poder fazer o cálculo exato no JavaScript
-                        colunasResumoPag.forEach(colResumo => {
-                            if (!colunasDetalhePag.includes(colResumo)) {
-                                colunasDetalhePag.push(colResumo);
+                        // Extração Direta da Planilha para os Cards Globais
+                        let sumArrecadado2025 = 0;
+                        let sumArrecadado2026 = 0;
+                        let sumGeralGlobal = 0;
+
+                        dadosPagamentosRaw.forEach(linha => {
+                            let vals = Object.values(linha).map(v => String(v).toUpperCase().trim());
+                            let joined = vals.join(' ');
+                            
+                            let maxNum = 0;
+                            Object.values(linha).forEach(v => {
+                                let num = window.parseDinheiro(v);
+                                if (num > maxNum) maxNum = num;
+                            });
+
+                            // Localiza as linhas exclusivas pelas Strings exatas da sua planilha
+                            if (joined.includes('TOTAL ARRECADADO 2025')) sumArrecadado2025 = maxNum;
+                            else if (joined.includes('TOTAL ARRECADADO 2026')) sumArrecadado2026 = maxNum;
+                            else if ((joined.includes('GERAL') || joined.match(/^GERAL$/m)) && (joined.includes('TOTAL') || maxNum > 0)) {
+                                sumGeralGlobal = maxNum;
                             }
+                        });
+
+                        let listaPagamentos = [];
+                        dadosPagamentosRaw.forEach(linha => {
+                            let arrematanteVal = linha[colArrematantePag] ? String(linha[colArrematantePag]).toUpperCase().trim() : '';
+                            let dataVal = linha[colDataPag] ? String(linha[colDataPag]).toUpperCase().trim() : '';
+                            
+                            // Remove as linhas globais e vazias da listagem da tabela
+                            if (arrematanteVal.includes('TOTAL ARRECADADO') || arrematanteVal === 'GERAL' || dataVal === 'GERAL' || arrematanteVal === '') {
+                                return; 
+                            }
+                            listaPagamentos.push(linha);
                         });
 
                         let pagamentosAgrupados = {};
 
-                        let colunasPag = new Set();
                         listaPagamentos.forEach(linha => {
-                            let arrematante = colArrematantePag ? escapeHTML(linha[colArrematantePag] || 'Não Informado') : 'Não Informado';
-                            if (arrematante === 'Não Informado' || arrematante === '-') return;
+                            let arrematante = colArrematantePag ? escapeHTML(linha[colArrematantePag]) : 'Não Informado';
 
                             if (!pagamentosAgrupados[arrematante]) {
                                 pagamentosAgrupados[arrematante] = {
                                     local: colLocalPag ? escapeHTML(linha[colLocalPag] || '-') : '-',
-                                    resumo: {},
                                     detalhes: []
                                 };
                             }
-
-                            colunasResumoPag.forEach(col => {
-                                let val = linha[col];
-                                if (val && String(val).trim() !== '-' && String(val).trim() !== '') {
-                                    if (!pagamentosAgrupados[arrematante].resumo[col] || window.parseDinheiro(val) > window.parseDinheiro(pagamentosAgrupados[arrematante].resumo[col])) {
-                                        pagamentosAgrupados[arrematante].resumo[col] = val;
-                                    }
-                                }
-                            });
 
                             let linhaDetalhe = {};
                             let temDadoValido = false;
@@ -1630,6 +1613,9 @@
                                     temDadoValido = true;
                                 }
                             });
+                            // Salva também as colunas contábeis originais escondidas para uso nos cálculos do rodapé do modal
+                            colunasResumoPag.forEach(col => { linhaDetalhe[col] = linha[col]; });
+
                             if (temDadoValido) {
                                 pagamentosAgrupados[arrematante].detalhes.push(linhaDetalhe);
                             }
@@ -1640,66 +1626,24 @@
                         window.colunasResumoPagamento = colunasResumoPag;
 
                         let tbodyMain = '';
-                        
-                        let colDataPag = todasColunasPag.find(c => window.normalizeStr(c) === 'DATA' || window.normalizeStr(c).includes('DATA'));
-                        let colValorPag = todasColunasPag.find(c => {
-                            let n = window.normalizeStr(c);
-                            return (n.includes('VALOR') || n.includes('R$') || n.includes('PAGO') || n.includes('PAGAMENTO')) && !n.includes('TOTAL') && !n.includes('SALDO');
-                        });
-                        let colTotalGlobalPag = todasColunasPag.find(c => window.normalizeStr(c) === 'TOTAL');
-                        let colSaldoGlobalPag = todasColunasPag.find(c => window.normalizeStr(c).includes('SALDO'));
-
-                        let sumArrecadado2025 = 0;
-                        let sumArrecadado2026 = 0;
-                        let sumSaldo2025 = 0;
-                        let sumSaldo2026 = 0;
+                        let colSaldoGlobalPag = todasColunasPag.find(c => normalizeStr(c).includes('SALDO'));
 
                         Object.keys(pagamentosAgrupados).forEach(arrematante => {
                             let dados = pagamentosAgrupados[arrematante];
                             
-                            let pagoGeral = 0;
-                            let anosPagamento = new Set();
-
+                            let minSaldo = null;
                             dados.detalhes.forEach(linha => {
-                                let valDataRaw = colDataPag ? linha[colDataPag] : null;
-                                let anoStr = "Sem Ano";
-                                if (valDataRaw) {
-                                    let s = String(valDataRaw);
-                                    if (s.includes('2025')) anoStr = '2025';
-                                    else if (s.includes('2026')) anoStr = '2026';
+                                if (colSaldoGlobalPag) {
+                                    let r = linha[colSaldoGlobalPag];
+                                    if (r !== undefined && r !== null && String(r).trim() !== '' && String(r).trim() !== '-') {
+                                        let v = window.parseDinheiro(r);
+                                        if (minSaldo === null || v < minSaldo) minSaldo = v;
+                                    }
                                 }
-                                if (anoStr !== "Sem Ano") anosPagamento.add(anoStr);
-
-                                let valP = window.parseDinheiro(colValorPag ? linha[colValorPag] : 0);
-                                pagoGeral += valP;
-                                if (anoStr === '2025') sumArrecadado2025 += valP;
-                                if (anoStr === '2026') sumArrecadado2026 += valP;
                             });
 
-                            let valTotalLote = 0;
-                            if (colTotalGlobalPag) {
-                                let totais = dados.detalhes.map(r => window.parseDinheiro(r[colTotalGlobalPag])).filter(n => n > 0);
-                                if (totais.length > 0) valTotalLote = Math.max(...totais);
-                            }
-
-                            let valSaldo = 0;
-                            let saldoDefinido = false;
-                            if (colSaldoGlobalPag) {
-                                let saldosValidos = dados.detalhes.filter(r => r[colSaldoGlobalPag] !== undefined && String(r[colSaldoGlobalPag]).trim() !== '' && String(r[colSaldoGlobalPag]).trim() !== '-');
-                                if (saldosValidos.length > 0) {
-                                    valSaldo = Math.min(...saldosValidos.map(r => window.parseDinheiro(r[colSaldoGlobalPag])));
-                                    saldoDefinido = true;
-                                }
-                            }
-                            if (!saldoDefinido && valTotalLote > 0) {
-                                valSaldo = valTotalLote - pagoGeral;
-                                if (valSaldo < 0) valSaldo = 0;
-                            }
-
-                            if (anosPagamento.has('2025') && !anosPagamento.has('2026')) sumSaldo2025 += valSaldo;
-                            else if (anosPagamento.has('2026')) sumSaldo2026 += valSaldo;
-                            else sumSaldo2025 += valSaldo; 
-
+                            let valSaldo = minSaldo !== null ? minSaldo : 0;
+                            
                             let trClasses = '';
                             let badgeHtml = '';
                             if (valSaldo > 0) {
@@ -1726,12 +1670,12 @@
                         });
 
                         if (Object.keys(pagamentosAgrupados).length === 0) {
-                            tbodyMain = `<tr><td colspan="3" class="p-6 text-center text-gray-500 italic">Nenhum arrematante com pagamentos registrado na aba da planilha.</td></tr>`;
+                            tbodyMain = `<tr><td colspan="3" class="p-6 text-center text-gray-500 italic">Nenhum arrematante válido encontrado.</td></tr>`;
                         }
 
                         let fmtCurPag = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
                         let cardsGlobaisHtml = `
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                                 <div class="card p-5 border-l-4 border-blue-400 bg-white shadow-sm flex flex-col justify-center transform hover:scale-105 transition-transform">
                                     <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider"><i class="fa-regular fa-calendar mr-1"></i> Total Arrecadado 2025</p>
                                     <h3 class="text-xl font-black text-navy mt-1">${fmtCurPag.format(sumArrecadado2025)}</h3>
@@ -1740,13 +1684,9 @@
                                     <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider"><i class="fa-regular fa-calendar mr-1"></i> Total Arrecadado 2026</p>
                                     <h3 class="text-xl font-black text-navy mt-1">${fmtCurPag.format(sumArrecadado2026)}</h3>
                                 </div>
-                                <div class="card p-5 border-l-4 border-orange-400 bg-orange-50/50 shadow-sm flex flex-col justify-center transform hover:scale-105 transition-transform">
-                                    <p class="text-[10px] font-bold text-orange-600 uppercase tracking-wider"><i class="fa-solid fa-scale-unbalanced mr-1"></i> Saldo Restante 2025</p>
-                                    <h3 class="text-xl font-black text-orange-700 mt-1">${fmtCurPag.format(sumSaldo2025)}</h3>
-                                </div>
-                                <div class="card p-5 border-l-4 border-orange-500 bg-orange-50 shadow-sm flex flex-col justify-center transform hover:scale-105 transition-transform">
-                                    <p class="text-[10px] font-bold text-orange-600 uppercase tracking-wider"><i class="fa-solid fa-scale-unbalanced mr-1"></i> Saldo Restante 2026</p>
-                                    <h3 class="text-xl font-black text-orange-700 mt-1">${fmtCurPag.format(sumSaldo2026)}</h3>
+                                <div class="card p-5 border-l-4 border-gold bg-blue-50 shadow-sm flex flex-col justify-center transform hover:scale-105 transition-transform">
+                                    <p class="text-[10px] font-bold text-navy uppercase tracking-wider"><i class="fa-solid fa-sack-dollar mr-1"></i> Geral Total</p>
+                                    <h3 class="text-xl font-black text-navy mt-1">${fmtCurPag.format(sumGeralGlobal)}</h3>
                                 </div>
                             </div>
                         `;
@@ -1756,7 +1696,7 @@
                                 <div class="card p-5 mb-6 border-l-4 border-navy bg-blue-50/40">
                                     <h3 class="text-xs font-bold text-navy uppercase tracking-wider mb-1"><i class="fa-solid fa-circle-info mr-2 text-gold"></i> Contexto da Seção</h3>
                                     <p class="text-xs text-slate-600 leading-relaxed">
-                                        Consolidação dos pagamentos efetuados agrupados por arrematante. Clique no botão de detalhes para visualizar o extrato completo de parcelas e totalizadores.
+                                        Consolidação dos pagamentos efetuados agrupados por arrematante. As informações numéricas e totalizadores espelham integralmente os dados registrados na aba oficial da planilha.
                                     </p>
                                 </div>
                                 ${cardsGlobaisHtml}
