@@ -226,6 +226,34 @@
             return null;
         };
 
+        window.abrirModalMapaGeral = function() {
+            const modal = document.getElementById('modal-mapa');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.querySelector('.transform').classList.replace('scale-95', 'scale-100');
+                    if (window.modalMap) {
+                        window.modalMap.invalidateSize();
+                        if (window.modalMapBounds && window.modalMapBounds.isValid()) {
+                            window.modalMap.fitBounds(window.modalMapBounds, { padding: [30, 30] });
+                        }
+                    }
+                }, 50);
+            }
+        };
+
+        window.fecharModalMapa = function() {
+            const modal = document.getElementById('modal-mapa');
+            if (modal) {
+                modal.querySelector('.transform').classList.replace('scale-100', 'scale-95');
+                setTimeout(() => {
+                    modal.classList.remove('flex');
+                    modal.classList.add('hidden');
+                }, 300);
+            }
+        };
+
         window.focarNoMapaModal = function(lat, lng) {
             window.abrirModalMapaGeral();
             setTimeout(() => {
@@ -1647,6 +1675,9 @@
                         let tbodyMain = '';
                         let colSaldoGlobalPag = todasColunasPag.find(c => normalizeStr(c).includes('SALDO'));
 
+                        // Array temporário para podermos ordenar as linhas antes de imprimir na tela
+                        let linhasParaTabela = [];
+
                         Object.keys(pagamentosAgrupados).forEach(arrematante => {
                             let dados = pagamentosAgrupados[arrematante];
                             
@@ -1673,6 +1704,33 @@
 
                             let valSaldo = minSaldo !== null ? minSaldo : 0;
                             
+                            // Define a prioridade para ordenação no funil (1: Quitado, 2: Em Andamento, 3: Aguardando)
+                            let ordemDeStatus = 1; // Padrão é Quitado (Verde) e vai pro topo
+                            if (isAguardando) {
+                                ordemDeStatus = 3; // Aguardando (Cinza) vai pro final
+                            } else if (valSaldo > 0) {
+                                ordemDeStatus = 2; // Em Andamento (Amarelo) fica no meio
+                            }
+
+                            linhasParaTabela.push({
+                                arrematante: arrematante,
+                                dados: dados,
+                                valSaldo: valSaldo,
+                                isAguardando: isAguardando,
+                                ordemDeStatus: ordemDeStatus
+                            });
+                        });
+
+                        // Ordena o array de arrematantes usando a prioridade que criamos acima
+                        linhasParaTabela.sort((a, b) => a.ordemDeStatus - b.ordemDeStatus);
+
+                        // Agora monta a tabela usando a lista organizada
+                        linhasParaTabela.forEach(item => {
+                            let arrematante = item.arrematante;
+                            let dados = item.dados;
+                            let valSaldo = item.valSaldo;
+                            let isAguardando = item.isAguardando;
+
                             let trClasses = '';
                             let badgeHtml = '';
                             
@@ -1702,7 +1760,7 @@
                             `;
                         });
 
-                        if (Object.keys(pagamentosAgrupados).length === 0) {
+                        if (linhasParaTabela.length === 0) {
                             tbodyMain = `<tr><td colspan="3" class="p-6 text-center text-gray-500 italic">Nenhum arrematante válido encontrado.</td></tr>`;
                         }
 
